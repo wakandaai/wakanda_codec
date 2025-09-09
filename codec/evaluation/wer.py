@@ -10,6 +10,7 @@ Simple script to compute WER between reference text and Whisper transcriptions.
 
 import os
 import warnings
+from pathlib import Path
 from typing import Union, Optional, List
 
 import torch
@@ -59,11 +60,25 @@ def transcribe_audio(pipe, audio_path: str, language: Optional[str] = None) -> s
     return result["text"].strip()
 
 
-def compute_wer(reference: str, hypothesis: str) -> float:
-    """Compute Word Error Rate between reference and hypothesis"""
-    return wer(reference, hypothesis)
-
-
-def compute_cer(reference: str, hypothesis: str) -> float:
-    """Compute Character Error Rate between reference and hypothesis"""
-    return cer(reference, hypothesis)
+def compute_wer(whisper_model, 
+                decoded_path: str, 
+                reference_text: str, 
+                language: Optional[str] = None) -> float:
+    """
+    Compute WER using pre-loaded Whisper model and file paths
+    
+    Args:
+        whisper_model: Pre-loaded Whisper pipeline
+        decoded_path: Path to decoded audio file to transcribe
+        reference_text: Reference text for WER computation
+        language: Language code for Whisper (e.g., "en", "es") or None for auto-detect
+        
+    Returns:
+        WER score (0.0 = perfect, higher = worse)
+    """
+    
+    # Transcribe decoded audio
+    hypothesis_text = transcribe_audio(whisper_model, decoded_path, language)
+    
+    # Compute WER
+    return wer(reference_text, hypothesis_text)

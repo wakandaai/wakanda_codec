@@ -325,7 +325,7 @@ def ECAPA_TDNN_SMALL(feat_dim, emb_dim=256, feat_type='fbank', sr=16000, feature
 MODEL_LIST = ['ecapa_tdnn', 'hubert_large', 'wav2vec2_xlsr', 'unispeech_sat', "wavlm_base_plus", "wavlm_large"]
 
 
-def init_model(model_name):
+def init_model(model_name, use_gpu: bool = True):
     """
     Initialize model exactly as in the original script
     """
@@ -346,6 +346,9 @@ def init_model(model_name):
         model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='wav2vec2_xlsr', config_path=config_path)
     else:
         model = ECAPA_TDNN_SMALL(feat_dim=40, feat_type='fbank')
+
+    if use_gpu and torch.cuda.is_available():
+        model = model.to('cuda')
 
     return model
 
@@ -381,10 +384,9 @@ def _load_and_preprocess_audio(audio_input: Union[str, np.ndarray],
 
 
 def compute_speaker_similarity(reference: Union[str, np.ndarray],
-                             decoded: Union[str, np.ndarray],
-                             model_name: str = 'wavlm_large',
-                             use_gpu: bool = True,
-                             sample_rate: Optional[int] = None) -> float:
+                               decoded: Union[str, np.ndarray],
+                               model: Any,
+                               sample_rate: Optional[int] = 16000) -> float:
     """
     Compute speaker similarity between reference and decoded audio
     
@@ -392,7 +394,6 @@ def compute_speaker_similarity(reference: Union[str, np.ndarray],
         reference: Reference audio (file path or numpy array)
         decoded: decoded/decoded audio (file path or numpy array)
         model_name: Speaker verification model to use (from MODEL_LIST)
-        use_gpu: Whether to use GPU for inference
         sample_rate: Sample rate (required if using numpy arrays)
         
     Returns:
@@ -408,23 +409,14 @@ def compute_speaker_similarity(reference: Union[str, np.ndarray],
         ...     "ref.wav", "dec.wav", 
         ...     model_name='wavlm_large'
         ... )
-    """
-    if model_name not in MODEL_LIST:
-        raise ValueError(f"Model {model_name} not supported. Choose from {MODEL_LIST}")
-    
-    # Initialize model using original function
-    model = init_model(model_name)
-    
-    # Set device
-    device = 'cuda' if use_gpu and torch.cuda.is_available() else 'cpu'
-    model = model.to(device)
-    
+    """  
+
     # Load and preprocess audio
-    ref_audio = _load_and_preprocess_audio(reference, sample_rate, target_sr=16000)
-    dec_audio = _load_and_preprocess_audio(decoded, sample_rate, target_sr=16000)
-    
-    ref_audio = ref_audio.to(device)
-    dec_audio = dec_audio.to(device)
+    ref_audio = _load_and_preprocess_audio(reference, sample_rate, target_sr=sample_rate)
+    dec_audio = _load_and_preprocess_audio(decoded, sample_rate, target_sr=sample_rate)
+
+    ref_audio = ref_audio.to(model.device)
+    dec_audio = dec_audio.to(model.device)
     
     # Extract embeddings
     model.eval()

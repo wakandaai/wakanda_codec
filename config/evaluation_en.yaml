@@ -1,0 +1,51 @@
+# Default configuration for audio codec evaluation
+
+device: auto  # "auto", "cuda", "cpu"
+
+metrics:
+  # Signal-based metrics (fast, no model loading required)
+  stoi:
+    enabled: true
+    extended: false  # Set to true for ESTOI
+    
+  pesq:
+    enabled: true
+    wideband: true  # Set to false for narrowband PESQ
+    
+  mcd:
+    enabled: true
+    mcep_dim: null      # Auto-select based on sample rate
+    mcep_alpha: null    # Auto-select based on sample rate  
+    fft_length: 1024
+    frame_shift_ms: 5
+    f0_min: 80
+    f0_max: 400
+  
+  # Model-based metrics (slower, require model loading)
+  speaker_similarity:
+    enabled: true
+    model_name: wavlm_large  # Options: ecapa_tdnn, hubert_large, wav2vec2_xlsr, unispeech_sat, wavlm_base_plus, wavlm_large
+    
+  utmos:
+    enabled: true
+    model_name: utmos22_strong  # UTMOS model variant
+    
+  nisqa:
+    enabled: true
+    sample_rate: 16000
+    
+  dnsmos:
+    enabled: true
+    sample_rate: 16000
+    personalized: false
+    
+  # ASR-based metrics (require transcriptions)
+  wer:
+    enabled: true
+    model_name: openai/whisper-large-v3  # Whisper model for ASR
+    language: en  # Auto-detect language, or specify (e.g., "en", "fr")
+    
+  cer:
+    enabled: true
+    model_name: openai/whisper-large-v3
+    language: en
