@@ -42,7 +42,7 @@ class DatasetEvaluator:
         self.results = {}  # Will store results by filename
         self.errors = []
     
-    def evaluate_dataset(self, file_pairs: List[Tuple[str, str]], 
+    def evaluate_dataset(self, file_pairs: List[Tuple[str, str, str]],
                         output_path: Optional[str] = None) -> pd.DataFrame:
         """
         Evaluate all file pairs and return results DataFrame
@@ -54,13 +54,13 @@ class DatasetEvaluator:
         4. Repeat for next metric
         
         Args:
-            file_pairs: List of (reference_path, decoded_path) tuples
+            file_pairs: List of (reference_path, decoded_path, reference_text) tuples
             output_path: Optional path to save results CSV
             
         Returns:
             DataFrame with evaluation results
         """
-        logger.info(f"Starting evaluation of {len(file_pairs)} file pairs")
+        logger.info(f"Starting evaluation of {len(file_pairs)} pairs")
         logger.info(f"Processing metrics sequentially: {self.enabled_metrics}")
         start_time = time.time()
         
@@ -69,11 +69,12 @@ class DatasetEvaluator:
         self.errors = []
         
         # Initialize results with file paths
-        for ref_path, dec_path in file_pairs:
+        for ref_path, dec_path, ref_text in file_pairs:
             file_key = self._get_file_key(ref_path, dec_path)
             self.results[file_key] = {
                 'reference_path': ref_path,
-                'decoded_path': dec_path
+                'decoded_path': dec_path,
+                'reference_text': ref_text
             }
         
         # Process each metric sequentially
@@ -109,7 +110,7 @@ class DatasetEvaluator:
         
         return df_results
     
-    def _process_metric_for_all_files(self, metric_name: str, file_pairs: List[Tuple[str, str]]):
+    def _process_metric_for_all_files(self, metric_name: str, file_pairs: List[Tuple[str, str, str]]):
         """
         Process a single metric for all file pairs
         
@@ -123,11 +124,11 @@ class DatasetEvaluator:
         model = self.model_manager.load_model_for_metric(metric_name)
         
         # Process all files for this metric
-        for ref_path, dec_path in tqdm(file_pairs, desc=f"Computing {metric_name}"):
+        for ref_path, dec_path, ref_text in tqdm(file_pairs, desc=f"Computing {metric_name}"):
             file_key = self._get_file_key(ref_path, dec_path)
             
             try:
-                score = self._compute_metric(metric_name, ref_path, dec_path, metric_config, model)
+                score = self._compute_metric(metric_name, ref_path, dec_path, ref_text, metric_config, model)
                 self.results[file_key][metric_name] = score
                 
             except Exception as e:
