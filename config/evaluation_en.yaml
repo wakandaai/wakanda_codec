@@ -1,6 +1,7 @@
 # Default configuration for audio codec evaluation
 
 device: auto  # "auto", "cuda", "cpu"
+n_processes: 4  # Number of parallel processes for evaluation
 
 metrics:
   # Signal-based metrics (fast, no model loading required)
@@ -10,8 +11,8 @@ metrics:
     
   pesq:
     enabled: true
-    wideband: true  # Set to false for narrowband PESQ
-    
+    mode: nb  # Set to nb for narrowband PESQ and wb for wideband PESQ
+
   mcd:
     enabled: false
     mcep_dim: null      # Auto-select based on sample rate

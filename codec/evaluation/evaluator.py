@@ -12,11 +12,15 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 import pandas as pd
 from tqdm import tqdm
+import soundfile as sf
+import torchaudio
 
 from codec.evaluation.model_manager import ModelManager
 from codec.evaluation.config import validate_config, get_enabled_metrics
 from codec.evaluation.speaker_sim import compute_speaker_similarity
-
+from codec.evaluation.espnet import compute_stoi, compute_mcd
+from codec.evaluation.torchmetrics import compute_PESQ, compute_NISQA, compute_DNSMOS
+from codec.evaluation.wer import compute_wer, transcribe_audio
 logger = logging.getLogger(__name__)
 
 
@@ -191,7 +195,6 @@ class DatasetEvaluator:
     
     def _compute_stoi(self, ref_path: str, dec_path: str, config: Dict[str, Any]) -> float:
         """Compute STOI metric"""
-        from .espnet import compute_stoi
         return compute_stoi(
             ref_path, dec_path,
             extended=config.get('extended', False)
@@ -199,15 +202,31 @@ class DatasetEvaluator:
     
     def _compute_pesq(self, ref_path: str, dec_path: str, config: Dict[str, Any]) -> float:
         """Compute PESQ metric"""
-        from .espnet import compute_pesq
-        return compute_pesq(
-            ref_path, dec_path,
-            wideband=config.get('wideband', True)
+        # load audio to tensors
+        ref_audio, _ = torchaudio.load(ref_path)
+        dec_audio, _ = torchaudio.load(dec_path)
+
+        # Ensure both audio tensors have the same length
+        ref_length = ref_audio.size(1)
+        dec_length = dec_audio.size(1)
+        
+        if dec_length < ref_length:
+            # Pad decoded audio if shorter than reference
+            padding = ref_length - dec_length
+            dec_audio = torch.nn.functional.pad(dec_audio, (0, padding))
+        elif dec_length > ref_length:
+            # Truncate decoded audio if longer than reference
+            dec_audio = dec_audio[:, :ref_length]
+        
+        # Both tensors now have the same length
+        assert ref_audio.size(1) == dec_audio.size(1), f"Audio length mismatch: ref={ref_audio.size(1)}, dec={dec_audio.size(1)}"
+        return compute_PESQ(
+            ref_audio, dec_audio,
+            mode=config.get('mode', "nb")
         )
     
     def _compute_mcd(self, ref_path: str, dec_path: str, config: Dict[str, Any]) -> float:
         """Compute MCD metric"""
-        from .espnet import compute_mcd
         return compute_mcd(
             ref_path, dec_path,
             mcep_dim=config.get('mcep_dim'),
@@ -277,7 +296,6 @@ class DatasetEvaluator:
             return float(score.item())
         else:
             # Fallback to original function
-            from .torchmetrics import compute_DNSMOS
             return compute_DNSMOS(
                 decoded_tensor, 
                 fs=sr,
@@ -306,8 +324,6 @@ class DatasetEvaluator:
         """Compute CER metric using pre-loaded Whisper model"""
         if model is None:
             raise RuntimeError("Whisper model not loaded for CER computation")
-        
-        from .wer import transcribe_audio, compute_cer
         
         # Load reference transcription
         ref_txt_path = Path(ref_path).with_suffix('.txt')

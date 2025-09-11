@@ -1,8 +1,11 @@
 # codec/evaluation/torchmetrics.py
 
 import torch
+from typing import Optional
 from torchmetrics.audio.nisqa import NonIntrusiveSpeechQualityAssessment
 from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore
+from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
+
 
 def compute_NISQA(dec: torch.Tensor, fs: int = 16000) -> float:
     """
@@ -36,4 +39,22 @@ def compute_DNSMOS(dec: torch.Tensor, fs: int = 16000, personalized: bool=False,
     """
     dnsmos_metric = DeepNoiseSuppressionMeanOpinionScore(fs=fs, personalized=personalized, device=device, num_threads=num_threads, cache_sessions=cache_sessions)
     score = dnsmos_metric(dec)
+    return score.item()
+
+def compute_PESQ(ref: torch.Tensor, dec: torch.Tensor, fs: int = 16000, mode: str = 'nb', n_processes: int = 1) -> float:
+    """
+    Compute Perceptual Evaluation of Speech Quality (PESQ) score.
+
+    Args:
+        ref (torch.Tensor): Reference audio tensor of shape (batch_size, time).
+        dec (torch.Tensor): Decoded audio tensor of shape (batch_size, time).
+        fs (int): Sampling frequency of the audio signals. Default is 16000 Hz.
+        mode (str): Mode of PESQ ('nb' for narrowband, 'wb' for wideband). Default is 'nb'.
+        n_processes (int): Number of processes to use for computation. Default is 1.
+
+    Returns:
+        float: PESQ score.
+    """
+    pesq_metric = PerceptualEvaluationSpeechQuality(fs=fs, mode=mode, n_processes=n_processes)
+    score = pesq_metric(dec, ref)
     return score.item()

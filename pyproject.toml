@@ -38,6 +38,7 @@ dependencies = [
     "torch",
     "torchaudio",
     "torchmetrics",
+    "pesq",
     "tqdm",
     "transformers",
 ]
