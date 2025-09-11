@@ -1,7 +1,8 @@
 # codec/evaluation/torchmetrics.py
 
 import torch
-from torchmetrics.audio import NonIntrusiveSpeechQualityAssessment, DeepNoiseSuppressionMeanOpinionScore
+from torchmetrics.audio.nisqa import NonIntrusiveSpeechQualityAssessment
+from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore
 
 def compute_NISQA(dec: torch.Tensor, fs: int = 16000) -> float:
     """

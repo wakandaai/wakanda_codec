@@ -1,10 +1,8 @@
-# codec/utils/librispeech.py
-
 """
 LibriSpeech Dataset Utilities
 
 Generate CSV manifests for codec evaluation from LibriSpeech datasets.
-Preserves original directory structure and file formats.
+Treats the root directory as a specific split (e.g., test-clean, dev-clean).
 """
 
 import os
@@ -18,49 +16,44 @@ logger = logging.getLogger(__name__)
 
 
 class LibriSpeechProcessor:
-    """Utility for processing LibriSpeech datasets into evaluation CSV manifests"""
+    """Utility for processing LibriSpeech split into evaluation CSV manifests"""
     
-    def __init__(self, librispeech_root: str, codec_output_root: str):
+    def __init__(self, split_root: str, codec_output_root: str):
         """
         Initialize LibriSpeech processor
         
         Args:
-            librispeech_root: Path to LibriSpeech root directory
+            split_root: Path to LibriSpeech split directory (e.g., /path/to/test-clean)
             codec_output_root: Path to codec output root directory
         """
-        self.librispeech_root = Path(librispeech_root)
+        self.split_root = Path(split_root)
         self.codec_output_root = Path(codec_output_root)
         
-        if not self.librispeech_root.exists():
-            raise FileNotFoundError(f"LibriSpeech root not found: {librispeech_root}")
+        if not self.split_root.exists():
+            raise FileNotFoundError(f"Split root not found: {split_root}")
         if not self.codec_output_root.exists():
             raise FileNotFoundError(f"Codec output root not found: {codec_output_root}")
     
-    def generate_manifest(self, subset: str, output_csv: str) -> pd.DataFrame:
+    def generate_manifest(self, output_csv: str) -> pd.DataFrame:
         """
-        Generate CSV manifest for a LibriSpeech subset
+        Generate CSV manifest for the LibriSpeech split
         
         Args:
-            subset: LibriSpeech subset name (e.g., 'dev-clean', 'test-clean')
             output_csv: Output CSV file path
             
         Returns:
             DataFrame with columns: reference, decoded, text
         """
-        logger.info(f"Processing LibriSpeech subset: {subset}")
-        
-        subset_path = self.librispeech_root / subset
-        if not subset_path.exists():
-            raise FileNotFoundError(f"Subset not found: {subset_path}")
+        logger.info(f"Processing LibriSpeech split: {self.split_root}")
         
         # Step 1: Parse all transcriptions
         logger.info("Parsing transcriptions...")
-        transcriptions = self._parse_transcriptions(subset_path)
+        transcriptions = self._parse_transcriptions(self.split_root)
         logger.info(f"Found {len(transcriptions)} transcriptions")
         
         # Step 2: Find all audio files and match with transcriptions
         logger.info("Finding audio files...")
-        audio_files = self._find_audio_files(subset_path)
+        audio_files = self._find_audio_files(self.split_root)
         logger.info(f"Found {len(audio_files)} audio files")
         
         # Step 3: Generate manifest entries
@@ -83,8 +76,8 @@ class LibriSpeechProcessor:
                 text = transcriptions[utterance_id]
                 
                 # Find corresponding decoded file
-                relative_path = audio_file.relative_to(subset_path)
-                decoded_file = self.codec_output_root / subset / relative_path
+                relative_path = audio_file.relative_to(self.split_root)
+                decoded_file = self.codec_output_root / relative_path
                 
                 # Validate files exist and are readable
                 if not self._validate_file(audio_file):
@@ -127,12 +120,12 @@ class LibriSpeechProcessor:
         
         return df
     
-    def _parse_transcriptions(self, subset_path: Path) -> Dict[str, str]:
+    def _parse_transcriptions(self, split_path: Path) -> Dict[str, str]:
         """
-        Parse all .trans.txt files in the subset
+        Parse all .trans.txt files in the split
         
         Args:
-            subset_path: Path to LibriSpeech subset directory
+            split_path: Path to LibriSpeech split directory
             
         Returns:
             Dictionary mapping utterance_id -> transcription
@@ -140,7 +133,7 @@ class LibriSpeechProcessor:
         transcriptions = {}
         
         # Find all .trans.txt files
-        trans_files = list(subset_path.rglob("*.trans.txt"))
+        trans_files = list(split_path.rglob("*.trans.txt"))
         
         for trans_file in trans_files:
             try:
@@ -170,18 +163,18 @@ class LibriSpeechProcessor:
         
         return transcriptions
     
-    def _find_audio_files(self, subset_path: Path) -> List[Path]:
+    def _find_audio_files(self, split_path: Path) -> List[Path]:
         """
-        Find all audio files in the subset
+        Find all audio files in the split
         
         Args:
-            subset_path: Path to LibriSpeech subset directory
+            split_path: Path to LibriSpeech split directory
             
         Returns:
             List of audio file paths
         """
         # LibriSpeech uses .flac format
-        audio_files = list(subset_path.rglob("*.flac"))
+        audio_files = list(split_path.rglob("*.flac"))
         return sorted(audio_files)
     
     def _validate_file(self, file_path: Path) -> bool:
@@ -198,39 +191,24 @@ class LibriSpeechProcessor:
             return file_path.exists() and file_path.is_file() and os.access(file_path, os.R_OK)
         except Exception:
             return False
-    
-    def get_available_subsets(self) -> List[str]:
-        """
-        Get list of available LibriSpeech subsets
-        
-        Returns:
-            List of subset names
-        """
-        subsets = []
-        for item in self.librispeech_root.iterdir():
-            if item.is_dir() and not item.name.startswith('.'):
-                subsets.append(item.name)
-        return sorted(subsets)
 
 
-def generate_librispeech_manifest(librispeech_root: str, 
+def generate_librispeech_manifest(split_root: str, 
                                  codec_output_root: str,
-                                 subset: str,
                                  output_csv: str) -> pd.DataFrame:
     """
     Convenience function to generate LibriSpeech manifest
     
     Args:
-        librispeech_root: Path to LibriSpeech root directory
+        split_root: Path to LibriSpeech split directory (e.g., /path/to/test-clean)
         codec_output_root: Path to codec output root directory  
-        subset: LibriSpeech subset name (e.g., 'dev-clean')
         output_csv: Output CSV file path
         
     Returns:
         DataFrame with evaluation manifest
     """
-    processor = LibriSpeechProcessor(librispeech_root, codec_output_root)
-    return processor.generate_manifest(subset, output_csv)
+    processor = LibriSpeechProcessor(split_root, codec_output_root)
+    return processor.generate_manifest(output_csv)
 
 
 # CLI interface for the utility
@@ -245,31 +223,18 @@ if __name__ == "__main__":
         )
     
     parser = argparse.ArgumentParser(description="Generate LibriSpeech evaluation manifests")
-    parser.add_argument("--librispeech-root", required=True,
-                       help="Path to LibriSpeech root directory")
+    parser.add_argument("--split-root", required=True,
+                       help="Path to LibriSpeech split directory (e.g., /path/to/test-clean)")
     parser.add_argument("--codec-output-root", required=True,
                        help="Path to codec output root directory")
-    parser.add_argument("--subset", required=True,
-                       help="LibriSpeech subset (e.g., dev-clean, test-clean)")
     parser.add_argument("--output", required=True,
                        help="Output CSV file")
-    parser.add_argument("--list-subsets", action="store_true",
-                       help="List available subsets and exit")
     
     args = parser.parse_args()
     setup_logging()
     
     try:
-        processor = LibriSpeechProcessor(args.librispeech_root, args.codec_output_root)
-        
-        if args.list_subsets:
-            subsets = processor.get_available_subsets()
-            print("Available LibriSpeech subsets:")
-            for subset in subsets:
-                print(f"  {subset}")
-            sys.exit(0)
-        
-        df = processor.generate_manifest(args.subset, args.output)
+        df = generate_librispeech_manifest(args.split_root, args.codec_output_root, args.output)
         print(f"Generated manifest with {len(df)} entries: {args.output}")
         
     except Exception as e:

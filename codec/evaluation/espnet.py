@@ -115,8 +115,7 @@ def _espnet_eval_PESQ(ref, enh, fs, compute_permutation: bool = True, wideband: 
     :param compute_permutation (bool):
     :param wideband (bool): Use wideband PESQ
     """
-    if shutil.which("PESQ") is None:
-        raise RuntimeError("PESQ: command not found: Please install")
+    pesq_path = os.path.abspath('./PESQ')
     if fs not in (8000, 16000):
         raise ValueError("Sample frequency must be 8000 or 16000: {}".format(fs))
     if ref.shape != enh.shape:
@@ -162,7 +161,7 @@ def _espnet_eval_PESQ(ref, enh, fs, compute_permutation: bool = True, wideband: 
                     # PESQ +<8000|16000> <ref.wav> <enh.wav> [smos] [cond]
                     if wideband:
                         commands = [
-                            "PESQ",
+                            pesq_path,
                             "+{}".format(fs),
                             "+wb",
                             ref_files[i][imic],
@@ -170,26 +169,41 @@ def _espnet_eval_PESQ(ref, enh, fs, compute_permutation: bool = True, wideband: 
                         ]
                     else:
                         commands = [
-                            "PESQ",
+                            pesq_path,
                             "+{}".format(fs),
                             ref_files[i][imic],
                             enh_files[j][imic],
                         ]
+                    
+                    # Capture PESQ output directly from stdout
                     with subprocess.Popen(
-                        commands, stdout=subprocess.DEVNULL, cwd=d
+                        commands, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=d, text=True
                     ) as p:
-                        _, _ = p.communicate()
+                        stdout, stderr = p.communicate()
 
-                    # e.g.
-                    # REFERENCE	 DEGRADED	 PESQMOS	 MOSLQO	 SAMPLE_FREQ	 MODE
-                    # /tmp/t/ref.0.wav	 /tmp/t/enh.0.wav	 -1.000	 4.644	 16000	wb
-                    result_txt = Path(d) / "pesq_results.txt"
-                    if result_txt.exists():
-                        with result_txt.open("r") as f:
-                            lis.append(float(f.readlines()[1].split()[3]))
+                    # Parse the output directly instead of relying on file
+                    if p.returncode == 0 and "P.862 Prediction" in stdout:
+                        # Find the line with "P.862 Prediction (Raw MOS, MOS-LQO):  = 1.991   1.625"
+                        for line in stdout.split('\n'):
+                            if "P.862 Prediction" in line and "=" in line:
+                                # Extract numbers after the "=" sign
+                                try:
+                                    # Split by "=" and take the right part, then split by whitespace
+                                    numbers_part = line.split('=')[1].strip()
+                                    numbers = numbers_part.split()
+                                    if len(numbers) >= 2:
+                                        # Take the second number (MOS-LQO)
+                                        moslqo_score = float(numbers[1])
+                                        lis.append(moslqo_score)
+                                        break
+                                except (ValueError, IndexError) as e:
+                                    warnings.warn(f"Failed to parse PESQ output: {e}")
+                                    lis.append(1.0)
+                        else:
+                            warnings.warn("Could not find P.862 Prediction line in PESQ output")
+                            lis.append(1.0)
                     else:
-                        # Sometimes PESQ is failed. I don't know why.
-                        warnings.warn("Processing error is found.")
+                        warnings.warn(f"PESQ failed with return code {p.returncode}, stderr: {stderr}")
                         lis.append(1.0)
                 # Averaging over n_mic
                 values2.append(sum(lis) / len(lis))
@@ -438,22 +452,22 @@ def _validate_inputs(reference: Union[str, np.ndarray],
     Validate and load audio inputs
     
     Returns:
-        Tuple of (reference_audio, enhanced_audio, sample_rate)
+        Tuple of (reference_audio, decoded_audio, sample_rate)
     """
     # Load audio files
     ref_audio, ref_sr = _load_audio(reference, sample_rate)
-    enh_audio, enh_sr = _load_audio(enhanced, sample_rate)
-    
+    dec_audio, dec_sr = _load_audio(decoded, sample_rate)
+
     # Validate sample rates match
-    if ref_sr != enh_sr:
-        raise ValueError(f"Sample rates don't match: reference={ref_sr}, enhanced={enh_sr}")
-    
+    if ref_sr != dec_sr:
+        raise ValueError(f"Sample rates don't match: reference={ref_sr}, decoded={dec_sr}")
+
     # Ensure same length (truncate to shorter)
-    min_len = min(len(ref_audio), len(enh_audio))
+    min_len = min(len(ref_audio), len(dec_audio))
     ref_audio = ref_audio[:min_len]
-    enh_audio = enh_audio[:min_len]
-    
-    return ref_audio, enh_audio, ref_sr
+    dec_audio = dec_audio[:min_len]
+
+    return ref_audio, dec_audio, ref_sr
 
 
 # =============================================================================

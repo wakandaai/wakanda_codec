@@ -5,7 +5,7 @@ device: auto  # "auto", "cuda", "cpu"
 metrics:
   # Signal-based metrics (fast, no model loading required)
   stoi:
-    enabled: true
+    enabled: false
     extended: false  # Set to true for ESTOI
     
   pesq:
@@ -13,7 +13,7 @@ metrics:
     wideband: true  # Set to false for narrowband PESQ
     
   mcd:
-    enabled: true
+    enabled: false
     mcep_dim: null      # Auto-select based on sample rate
     mcep_alpha: null    # Auto-select based on sample rate  
     fft_length: 1024
@@ -23,24 +23,24 @@ metrics:
   
   # Model-based metrics (slower, require model loading)
   speaker_similarity:
-    enabled: true
+    enabled: false
     model_name: wavlm_large  # Options: ecapa_tdnn, hubert_large, wav2vec2_xlsr, unispeech_sat, wavlm_base_plus, wavlm_large
     
   utmos:
-    enabled: true
+    enabled: false
     model_name: utmos22_strong  # UTMOS model variant
     
   nisqa:
-    enabled: true
+    enabled: false
     sample_rate: 16000
     
   dnsmos:
-    enabled: true
+    enabled: false
     sample_rate: 16000
     personalized: false
     
   # ASR-based metrics (require transcriptions)
   wer:
-    enabled: true
+    enabled: false
     model_name: openai/whisper-large-v3  # Whisper model for ASR
     language: en  # Auto-detect language, or specify (e.g., "en", "fr")

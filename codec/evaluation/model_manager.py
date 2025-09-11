@@ -13,7 +13,8 @@ import warnings
 from codec.evaluation.utmos import UTMOSPredictor
 from codec.evaluation.speaker_sim import init_model
 from codec.evaluation.wer import load_whisper_model
-from torchmetrics.audio import DeepNoiseSuppressionMeanOpinionScore, NonIntrusiveSpeechQualityAssessment
+from torchmetrics.audio.nisqa import NonIntrusiveSpeechQualityAssessment
+from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore
 
 logger = logging.getLogger(__name__)
 

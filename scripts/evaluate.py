@@ -4,13 +4,6 @@
 Audio Codec Evaluation CLI
 
 Usage:
-    # Generate LibriSpeech manifest first
-    python -m codec.utils.librispeech --librispeech-root /path/to/LibriSpeech \
-                                     --codec-output-root /path/to/decoded \
-                                     --subset dev-clean \
-                                     --output manifest.csv
-
-    # Run evaluation
     python evaluate.py --config config/evaluation_en.yaml \
                        --csv-pairs manifest.csv \
                        --output results.csv
