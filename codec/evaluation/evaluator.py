@@ -9,7 +9,7 @@ Sequential metric processing with improved results reporting
 import logging
 import time
 from pathlib import Path
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Literal, Tuple, Dict, Any, Optional
 import pandas as pd
 from tqdm import tqdm
 import soundfile as sf
@@ -92,11 +92,13 @@ class DatasetEvaluator:
                 'decoded_path': dec_path,
                 'reference_text': ref_text
             }
+
+        n_processes = self.config.get('n_processes', 1)
         
         # Process each metric sequentially
         for metric_name in self.enabled_metrics:
             logger.info(f"Processing metric: {metric_name}")
-            self._process_metric_for_all_files(metric_name, file_pairs)
+            self._process_metric_for_all_files(metric_name, file_pairs, n_processes)
             
             # Save incremental results after each metric
             self._save_incremental_results(metric_name)
@@ -123,9 +125,6 @@ class DatasetEvaluator:
         logger.info(f"Results per metric: {success_count}")
         logger.info(f"Total errors: {len(self.errors)}")
         
-        # Save final summary results
-        self._save_summary_results(df_results)
-        
         return df_results
     
     def _setup_results_directory(self, output_path: Optional[str]):
@@ -140,13 +139,14 @@ class DatasetEvaluator:
         self.results_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Results will be saved to: {self.results_dir}")
     
-    def _process_metric_for_all_files(self, metric_name: str, file_pairs: List[Tuple[str, str, str]]):
+    def _process_metric_for_all_files(self, metric_name: str, file_pairs: List[Tuple[str, str, str]], n_processes: int):
         """
         Process a single metric for all file pairs
         
         Args:
             metric_name: Name of metric to process
             file_pairs: List of file pairs to process
+            n_processes: Number of processes to use (if applicable)
         """
         metric_config = self.config['metrics'][metric_name]
         
@@ -158,7 +158,7 @@ class DatasetEvaluator:
             file_key = self._get_file_key(ref_path, dec_path)
             
             try:
-                score = self._compute_metric(metric_name, ref_path, dec_path, ref_text, metric_config, model)
+                score = self._compute_metric(metric_name, ref_path, dec_path, ref_text, metric_config, model, n_processes)
                 self.results[file_key][metric_name] = score
                 
             except Exception as e:
@@ -205,40 +205,12 @@ class DatasetEvaluator:
                 logger.info(f"{metric_name} stats: mean={metric_values.mean():.4f}, "
                            f"std={metric_values.std():.4f}, count={len(metric_values)}")
     
-    def _save_summary_results(self, df_results: pd.DataFrame):
-        """
-        Save final summary results with all metrics
-        
-        Args:
-            df_results: Complete results DataFrame
-        """
-        # Save complete summary
-        summary_file = self.results_dir / "summary.csv"
-        df_results.to_csv(summary_file, index=False)
-        logger.info(f"Saved complete summary to: {summary_file}")
-        
-        # Save error log if there were errors
-        if self.errors:
-            error_file = self.results_dir / "errors.json"
-            import json
-            with open(error_file, 'w') as f:
-                json.dump(self.errors, f, indent=2)
-            logger.info(f"Error log saved to: {error_file}")
-        
-        # Generate and save summary statistics
-        summary_stats = self.get_summary_stats(df_results)
-        stats_file = self.results_dir / "summary_stats.json"
-        import json
-        with open(stats_file, 'w') as f:
-            json.dump(summary_stats, f, indent=2)
-        logger.info(f"Summary statistics saved to: {stats_file}")
-    
     def _get_file_key(self, ref_path: str, dec_path: str) -> str:
         """Generate unique key for file pair"""
         return f"{ref_path}|{dec_path}"
     
     def _compute_metric(self, metric_name: str, ref_path: str, dec_path: str, ref_text: str, 
-                       metric_config: Dict[str, Any], model: Optional[Any] = None) -> float:
+                       metric_config: Dict[str, Any], model: Optional[Any] = None, n_processes: int = 1) -> float:
         """
         Compute a specific metric for a file pair
         
@@ -249,14 +221,17 @@ class DatasetEvaluator:
             dec_path: Decoded audio file path  
             metric_config: Configuration for this metric
             model: Pre-loaded model (if applicable)
+            n_processes: Number of processes to use (if applicable)
             
         Returns:
             Metric score
         """
         if metric_name == 'stoi':
             return self._compute_stoi(ref_path, dec_path, metric_config)
-        elif metric_name == 'pesq':
-            return self._compute_pesq(ref_path, dec_path, metric_config)
+        elif metric_name == 'pesq_nb':
+            return self._compute_pesq(ref_path, dec_path, metric_config, mode='nb', n_processes=n_processes)
+        elif metric_name == 'pesq_wb':
+            return self._compute_pesq(ref_path, dec_path, metric_config, mode='wb', n_processes=n_processes)
         elif metric_name == 'mcd':
             return self._compute_mcd(ref_path, dec_path, metric_config)
         elif metric_name == 'speaker_similarity':
@@ -281,7 +256,7 @@ class DatasetEvaluator:
             extended=config.get('extended', False)
         )
     
-    def _compute_pesq(self, ref_path: str, dec_path: str, config: Dict[str, Any]) -> float:
+    def _compute_pesq(self, ref_path: str, dec_path: str, config: Dict[str, Any], mode: Literal['nb', 'wb'], n_processes: int) -> float:
         """Compute PESQ metric"""
         # load audio to tensors
         ref_audio, _ = torchaudio.load(ref_path)
@@ -303,7 +278,8 @@ class DatasetEvaluator:
         assert ref_audio.size(1) == dec_audio.size(1), f"Audio length mismatch: ref={ref_audio.size(1)}, dec={dec_audio.size(1)}"
         return compute_PESQ(
             ref_audio, dec_audio,
-            mode=config.get('mode', "nb")
+            mode=mode,
+            n_processes=n_processes
         )
     
     def _compute_mcd(self, ref_path: str, dec_path: str, config: Dict[str, Any]) -> float:

@@ -8,13 +8,15 @@ metrics:
   stoi:
     enabled: false
     extended: false  # Set to true for ESTOI
+  
+  pesq_nb:
+    enabled: false
     
-  pesq:
-    enabled: true
-    mode: wb  # Set to nb for narrowband PESQ and wb for wideband PESQ
+  pesq_wb:
+    enabled: false
 
   mcd:
-    enabled: false
+    enabled: true
     mcep_dim: null      # Auto-select based on sample rate
     mcep_alpha: null    # Auto-select based on sample rate  
     fft_length: 1024
