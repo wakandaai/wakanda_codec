@@ -7,7 +7,7 @@ Configuration management for audio codec evaluation
 import yaml
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 def load_config(config_path: str) -> Dict[str, Any]:
     """

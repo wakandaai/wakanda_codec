@@ -20,7 +20,7 @@ import subprocess
 import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, List
 
 import numpy as np
 import soundfile

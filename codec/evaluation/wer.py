@@ -60,7 +60,7 @@ def transcribe_audio(pipe, audio_path: str, language: Optional[str] = None) -> s
     return result["text"].strip()
 
 
-def compute_wer(whisper_model, 
+def compute_wer(model, 
                 decoded_path: str, 
                 reference_text: str, 
                 language: Optional[str] = None) -> float:
@@ -68,7 +68,7 @@ def compute_wer(whisper_model,
     Compute WER using pre-loaded Whisper model and file paths
     
     Args:
-        whisper_model: Pre-loaded Whisper pipeline
+        model: Pre-loaded Whisper pipeline
         decoded_path: Path to decoded audio file to transcribe
         reference_text: Reference text for WER computation
         language: Language code for Whisper (e.g., "en", "es") or None for auto-detect
@@ -78,7 +78,7 @@ def compute_wer(whisper_model,
     """
     
     # Transcribe decoded audio
-    hypothesis_text = transcribe_audio(whisper_model, decoded_path, language)
+    hypothesis_text = transcribe_audio(model, decoded_path, language)
     
     # Compute WER
     return wer(reference_text, hypothesis_text)
