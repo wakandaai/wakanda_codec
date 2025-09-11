@@ -432,12 +432,12 @@ def compute_mcd(reference: Union[str, np.ndarray],
         ref_audio, sr, mcep_dim, mcep_alpha, fft_length, 
         frame_shift_ms, f0_min, f0_max
     )
-    enh_feats = _espnet_world_extract(
-        enh_audio, sr, mcep_dim, mcep_alpha, fft_length,
+    dec_feats = _espnet_world_extract(
+        dec_audio, sr, mcep_dim, mcep_alpha, fft_length,
         frame_shift_ms, f0_min, f0_max  
     )
     
     # Calculate MCD using ESPNet function
-    mcd_score = _espnet_calculate_mcd(ref_feats, enh_feats)
-    
+    mcd_score = _espnet_calculate_mcd(ref_feats, dec_feats)
+
     return float(mcd_score)

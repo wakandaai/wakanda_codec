@@ -3,7 +3,7 @@
 """
 Dataset-level evaluation for neural audio codecs
 
-Sequential metric processing
+Sequential metric processing with improved results reporting
 """
 
 import logging
@@ -21,23 +21,27 @@ from codec.evaluation.speaker_sim import compute_speaker_similarity
 from codec.evaluation.espnet import compute_stoi, compute_mcd
 from codec.evaluation.torchmetrics import compute_PESQ, compute_NISQA, compute_DNSMOS
 from codec.evaluation.wer import compute_wer, transcribe_audio
+
 logger = logging.getLogger(__name__)
 
 
 class DatasetEvaluator:
     """Main class for evaluating audio codec performance on datasets"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], model_name: Optional[str] = None):
         """
         Initialize evaluator with configuration
         
         Args:
             config: Configuration dictionary specifying metrics and parameters
+            model_name: Name of the model being evaluated (for organized results)
         """
         self.config = validate_config(config)
         self.enabled_metrics = get_enabled_metrics(self.config)
+        self.model_name = model_name or "unnamed_model"
         
         logger.info(f"Enabled metrics: {self.enabled_metrics}")
+        logger.info(f"Model name: {self.model_name}")
         
         # Initialize model manager for on-demand model loading
         self.model_manager = ModelManager(self.config)
@@ -45,6 +49,9 @@ class DatasetEvaluator:
         # Results storage
         self.results = {}  # Will store results by filename
         self.errors = []
+        
+        # Setup results directory
+        self.results_dir = None
     
     def evaluate_dataset(self, file_pairs: List[Tuple[str, str, str]],
                         output_path: Optional[str] = None) -> pd.DataFrame:
@@ -54,12 +61,14 @@ class DatasetEvaluator:
         Process one metric at a time to avoid GPU memory issues:
         1. Load model for metric
         2. Process all file pairs for that metric  
-        3. Clean up model
-        4. Repeat for next metric
+        3. Save incremental results
+        4. Clean up model
+        5. Repeat for next metric
+        6. Generate final summary
         
         Args:
             file_pairs: List of (reference_path, decoded_path, reference_text) tuples
-            output_path: Optional path to save results CSV
+            output_path: Optional path to save results CSV (defaults to results/{model_name}/)
             
         Returns:
             DataFrame with evaluation results
@@ -67,6 +76,9 @@ class DatasetEvaluator:
         logger.info(f"Starting evaluation of {len(file_pairs)} pairs")
         logger.info(f"Processing metrics sequentially: {self.enabled_metrics}")
         start_time = time.time()
+        
+        # Setup results directory
+        self._setup_results_directory(output_path)
         
         # Initialize results storage
         self.results = {}
@@ -85,13 +97,16 @@ class DatasetEvaluator:
         for metric_name in self.enabled_metrics:
             logger.info(f"Processing metric: {metric_name}")
             self._process_metric_for_all_files(metric_name, file_pairs)
+            
+            # Save incremental results after each metric
+            self._save_incremental_results(metric_name)
         
         # Convert results to DataFrame
         if self.results:
             df_results = pd.DataFrame(list(self.results.values()))
         else:
             # Create empty DataFrame with expected columns
-            columns = ['reference_path', 'decoded_path'] + self.enabled_metrics
+            columns = ['reference_path', 'decoded_path', 'reference_text'] + self.enabled_metrics
             df_results = pd.DataFrame(columns=columns)
         
         elapsed_time = time.time() - start_time
@@ -108,11 +123,22 @@ class DatasetEvaluator:
         logger.info(f"Results per metric: {success_count}")
         logger.info(f"Total errors: {len(self.errors)}")
         
-        # Save results if output path provided
-        if output_path:
-            self._save_results(df_results, output_path)
+        # Save final summary results
+        self._save_summary_results(df_results)
         
         return df_results
+    
+    def _setup_results_directory(self, output_path: Optional[str]):
+        """Setup results directory structure"""
+        if output_path:
+            # Use provided path as base
+            self.results_dir = Path(output_path).parent
+        else:
+            # Create results directory based on model name
+            self.results_dir = Path("results") / self.model_name
+        
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Results will be saved to: {self.results_dir}")
     
     def _process_metric_for_all_files(self, metric_name: str, file_pairs: List[Tuple[str, str, str]]):
         """
@@ -152,6 +178,61 @@ class DatasetEvaluator:
         # Clean up model after processing all files for this metric
         self.model_manager.cleanup_current_model()
     
+    def _save_incremental_results(self, metric_name: str):
+        """
+        Save incremental results for a specific metric
+        
+        Args:
+            metric_name: Name of the metric that was just computed
+        """
+        # Create DataFrame with current results
+        df_current = pd.DataFrame(list(self.results.values()))
+        
+        # Filter to only include essential columns + current metric
+        essential_cols = ['reference_path', 'decoded_path', 'reference_text']
+        if metric_name in df_current.columns:
+            metric_cols = essential_cols + [metric_name]
+            df_metric = df_current[metric_cols].copy()
+            
+            # Save metric-specific CSV
+            metric_file = self.results_dir / f"{metric_name}.csv"
+            df_metric.to_csv(metric_file, index=False)
+            logger.info(f"Saved {metric_name} results to: {metric_file}")
+            
+            # Log metric statistics
+            metric_values = df_metric[metric_name].dropna()
+            if len(metric_values) > 0:
+                logger.info(f"{metric_name} stats: mean={metric_values.mean():.4f}, "
+                           f"std={metric_values.std():.4f}, count={len(metric_values)}")
+    
+    def _save_summary_results(self, df_results: pd.DataFrame):
+        """
+        Save final summary results with all metrics
+        
+        Args:
+            df_results: Complete results DataFrame
+        """
+        # Save complete summary
+        summary_file = self.results_dir / "summary.csv"
+        df_results.to_csv(summary_file, index=False)
+        logger.info(f"Saved complete summary to: {summary_file}")
+        
+        # Save error log if there were errors
+        if self.errors:
+            error_file = self.results_dir / "errors.json"
+            import json
+            with open(error_file, 'w') as f:
+                json.dump(self.errors, f, indent=2)
+            logger.info(f"Error log saved to: {error_file}")
+        
+        # Generate and save summary statistics
+        summary_stats = self.get_summary_stats(df_results)
+        stats_file = self.results_dir / "summary_stats.json"
+        import json
+        with open(stats_file, 'w') as f:
+            json.dump(summary_stats, f, indent=2)
+        logger.info(f"Summary statistics saved to: {stats_file}")
+    
     def _get_file_key(self, ref_path: str, dec_path: str) -> str:
         """Generate unique key for file pair"""
         return f"{ref_path}|{dec_path}"
@@ -187,7 +268,7 @@ class DatasetEvaluator:
         elif metric_name == 'dnsmos':
             return self._compute_dnsmos(ref_path, dec_path, metric_config, model)
         elif metric_name == 'wer':
-            return self._compute_wer(ref_path, dec_path, metric_config, model, ref_text)
+            return self._compute_wer(dec_path, ref_text, metric_config, model)
         elif metric_name == 'cer':
             return self._compute_cer(ref_path, dec_path, metric_config, model, ref_text)
         else:
@@ -320,41 +401,29 @@ class DatasetEvaluator:
                            language=language)
     
     def _compute_cer(self, ref_path: str, dec_path: str, 
-                    config: Dict[str, Any], model: Optional[Any] = None) -> float:
+                    config: Dict[str, Any], model: Optional[Any] = None, ref_text: str = None) -> float:
         """Compute CER metric using pre-loaded Whisper model"""
         if model is None:
             raise RuntimeError("Whisper model not loaded for CER computation")
         
-        # Load reference transcription
-        ref_txt_path = Path(ref_path).with_suffix('.txt')
-        if not ref_txt_path.exists():
-            raise FileNotFoundError(f"Reference transcription not found: {ref_txt_path}")
-        
-        with open(ref_txt_path, 'r') as f:
-            reference_text = f.read().strip()
+        # Use provided reference text or load from file
+        if ref_text is None:
+            ref_txt_path = Path(ref_path).with_suffix('.txt')
+            if not ref_txt_path.exists():
+                raise FileNotFoundError(f"Reference transcription not found: {ref_txt_path}")
+            
+            with open(ref_txt_path, 'r') as f:
+                reference_text = f.read().strip()
+        else:
+            reference_text = ref_text
         
         # Transcribe decoded audio using pre-loaded model
         language = config.get('language')
         hypothesis_text = transcribe_audio(model, dec_path, language)
         
         # Compute CER
-        return compute_cer(reference_text, hypothesis_text)
-    
-    def _save_results(self, df_results: pd.DataFrame, output_path: str):
-        """Save results to CSV file"""
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        df_results.to_csv(output_file, index=False)
-        logger.info(f"Results saved to: {output_file}")
-        
-        # Also save error log if there were errors
-        if self.errors:
-            error_file = output_file.with_suffix('.errors.json')
-            import json
-            with open(error_file, 'w') as f:
-                json.dump(self.errors, f, indent=2)
-            logger.info(f"Error log saved to: {error_file}")
+        from jiwer import cer
+        return cer(reference_text, hypothesis_text)
     
     def get_summary_stats(self, df_results: pd.DataFrame) -> Dict[str, Dict[str, float]]:
         """

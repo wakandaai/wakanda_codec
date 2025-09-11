@@ -11,7 +11,7 @@ metrics:
     
   pesq:
     enabled: true
-    mode: nb  # Set to nb for narrowband PESQ and wb for wideband PESQ
+    mode: wb  # Set to nb for narrowband PESQ and wb for wideband PESQ
 
   mcd:
     enabled: false

@@ -1,4 +1,4 @@
-# evaluate.py
+# scripts/evaluate.py
 
 """
 Audio Codec Evaluation CLI
@@ -6,7 +6,7 @@ Audio Codec Evaluation CLI
 Usage:
     python evaluate.py --config config/evaluation_en.yaml \
                        --csv-pairs manifest.csv \
-                       --output results.csv
+                       --model-name {model_name}
 """
 
 import argparse
@@ -35,8 +35,12 @@ def main():
                        help="Path to evaluation configuration file")
     parser.add_argument("--csv-pairs", required=True,
                        help="CSV file with reference,decoded,text columns")
-    parser.add_argument("--output", "-o", required=True,
-                       help="Output CSV file for results")
+    parser.add_argument("--model-name", "-m", required=True,
+                       help="Name of the model being evaluated (for organized results)")
+    
+    # Optional arguments
+    parser.add_argument("--output", "-o", 
+                       help="Output directory for results (defaults to results/{model_name}/)")
     
     # CSV column configuration
     parser.add_argument("--ref-col", default="reference",
@@ -82,9 +86,9 @@ def main():
         
         logger.info(f"Found {len(file_pairs)} file pairs to evaluate")
         
-        # Initialize evaluator
+        # Initialize evaluator with model name
         logger.info("Initializing evaluator...")
-        evaluator = DatasetEvaluator(config)
+        evaluator = DatasetEvaluator(config, model_name=args.model_name)
         
         # Run evaluation
         logger.info("Starting evaluation...")
@@ -94,7 +98,7 @@ def main():
         summary = evaluator.get_summary_stats(results_df)
         
         print("\n" + "="*60)
-        print("EVALUATION SUMMARY")
+        print(f"EVALUATION SUMMARY - MODEL: {args.model_name.upper()}")
         print("="*60)
         
         for metric, stats in summary.items():
@@ -107,7 +111,16 @@ def main():
             else:
                 print(f"\n{metric.upper()}: No results")
         
-        print(f"\nResults saved to: {args.output}")
+        # Determine results directory
+        if args.output:
+            results_dir = Path(args.output)
+        else:
+            results_dir = Path("results") / args.model_name
+            
+        print(f"\nResults saved to: {results_dir}")
+        print(f"  - Individual metric files: {list(results_dir.glob('*.csv'))}")
+        print(f"  - Summary: {results_dir / 'summary.csv'}")
+        print(f"  - Statistics: {results_dir / 'summary_stats.json'}")
         
         # Cleanup
         evaluator.cleanup()
