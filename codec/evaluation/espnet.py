@@ -427,6 +427,12 @@ def compute_mcd(reference: Union[str, np.ndarray],
     """
     ref_audio, dec_audio, sr = _validate_inputs(reference, decoded, sample_rate)
 
+    if mcep_dim is None or mcep_alpha is None:
+        auto_dim, auto_alpha = _get_best_mcep_params(sr)
+        if mcep_dim is None:
+            mcep_dim = auto_dim
+        if mcep_alpha is None:
+            mcep_alpha = auto_alpha
     # Extract WORLD features using ESPNet functions (with auto parameter selection)
     ref_feats = _espnet_world_extract(
         ref_audio, sr, mcep_dim, mcep_alpha, fft_length, 
