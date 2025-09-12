@@ -40,6 +40,11 @@ dependencies = [
     "torchmetrics",
     "pesq",
     "tqdm",
+    "pymcd",
+    "omegaconf",
+    "librosa",
+    "onnxruntime-gpu",
+    "requests",
     "transformers",
 ]
 

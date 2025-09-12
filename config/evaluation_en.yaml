@@ -16,7 +16,7 @@ metrics:
     enabled: false
 
   mcd:
-    enabled: true
+    enabled: false
     mcep_dim: null      # Auto-select based on sample rate
     mcep_alpha: null    # Auto-select based on sample rate  
     fft_length: 1024
@@ -38,7 +38,7 @@ metrics:
     sample_rate: 16000
     
   dnsmos:
-    enabled: false
+    enabled: true
     sample_rate: 16000
     personalized: false
     

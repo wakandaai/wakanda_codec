@@ -13,6 +13,7 @@ import warnings
 from codec.evaluation.utmos import UTMOSPredictor
 from codec.evaluation.speaker_sim import init_model
 from codec.evaluation.wer import load_whisper_model
+from codec.evaluation.mcd import create_mcd_toolbox
 from torchmetrics.audio.nisqa import NonIntrusiveSpeechQualityAssessment
 from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore
 
@@ -70,8 +71,10 @@ class ModelManager:
                 model = self._load_nisqa_model(metric_config)
             elif metric_name == 'dnsmos':
                 model = self._load_dnsmos_model(metric_config)
+            elif metric_name == 'mcd':
+                model = create_mcd_toolbox()
             else:
-                # No model needed for this metric (e.g., STOI, PESQ, MCD)
+                # No model needed for this metric (e.g., STOI, PESQ)
                 return None
             
             self.current_model = model

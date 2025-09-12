@@ -20,7 +20,7 @@ def compute_NISQA(dec: torch.Tensor, fs: int = 16000) -> float:
     """
     nisqa_metric = NonIntrusiveSpeechQualityAssessment(fs=fs)
     score = nisqa_metric(dec)
-    return score.item()
+    return score
 
 def compute_DNSMOS(dec: torch.Tensor, fs: int = 16000, personalized: bool=False, device: Optional[str]="cuda:0", num_threads: Optional[int] = None, cache_sessions: bool = True) -> float:
     """

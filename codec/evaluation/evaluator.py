@@ -13,12 +13,14 @@ from typing import List, Literal, Tuple, Dict, Any, Optional
 import pandas as pd
 from tqdm import tqdm
 import soundfile as sf
+import torch
 import torchaudio
 
 from codec.evaluation.model_manager import ModelManager
 from codec.evaluation.config import validate_config, get_enabled_metrics
 from codec.evaluation.speaker_sim import compute_speaker_similarity
-from codec.evaluation.espnet import compute_stoi, compute_mcd
+from codec.evaluation.espnet import compute_stoi
+from codec.evaluation.mcd import compute_mcd
 from codec.evaluation.torchmetrics import compute_PESQ, compute_NISQA, compute_DNSMOS
 from codec.evaluation.wer import compute_wer, transcribe_audio
 
@@ -233,7 +235,7 @@ class DatasetEvaluator:
         elif metric_name == 'pesq_wb':
             return self._compute_pesq(ref_path, dec_path, metric_config, mode='wb', n_processes=n_processes)
         elif metric_name == 'mcd':
-            return self._compute_mcd(ref_path, dec_path, metric_config)
+            return self._compute_mcd(model, ref_path, dec_path)
         elif metric_name == 'speaker_similarity':
             return self._compute_speaker_similarity(ref_path, dec_path, metric_config, model)
         elif metric_name == 'utmos':
@@ -282,16 +284,10 @@ class DatasetEvaluator:
             n_processes=n_processes
         )
     
-    def _compute_mcd(self, ref_path: str, dec_path: str, config: Dict[str, Any]) -> float:
+    def _compute_mcd(self, model, ref_path: str, dec_path: str) -> float:
         """Compute MCD metric"""
         return compute_mcd(
-            ref_path, dec_path,
-            mcep_dim=config.get('mcep_dim'),
-            mcep_alpha=config.get('mcep_alpha'),
-            fft_length=config.get('fft_length', 1024),
-            frame_shift_ms=config.get('frame_shift_ms', 5),
-            f0_min=config.get('f0_min', 80),
-            f0_max=config.get('f0_max', 400)
+            model, ref_path, dec_path
         )
     
     def _compute_speaker_similarity(self, ref_path: str, dec_path: str, 
@@ -308,12 +304,23 @@ class DatasetEvaluator:
     
     def _compute_utmos(self, ref_path: str, dec_path: str, 
                       config: Dict[str, Any], model: Optional[Any] = None) -> float:
+
         """Compute UTMOS metric using pre-loaded model"""
         if model is not None:
-            # Use pre-loaded predictor
+            # Load audio using soundfile (returns numpy array)
             audio, sr = sf.read(dec_path)
-            audio_tensor = torch.from_numpy(audio)
-            return model.predict(audio_tensor, sr)
+            
+            # Ensure audio is 1D (mono)
+            if audio.ndim > 1:
+                audio = audio.mean(axis=1)  # Convert stereo to mono by averaging channels
+            
+            # Convert to tensor and add batch dimension
+            # UTMOS expects (batch, time) format, NOT (batch, channels, time)
+            audio_tensor = torch.from_numpy(audio).float().unsqueeze(0)  # Shape: (1, time)
+            
+            # Use the predictor's predict method which handles device placement
+            score = model.predict(audio_tensor, sr)
+            return float(score)
         else:
             raise RuntimeError("UTMOS model not loaded")
     
@@ -324,18 +331,15 @@ class DatasetEvaluator:
         # Load audio
         decoded_audio, sr = sf.read(dec_path)
         decoded_tensor = torch.from_numpy(decoded_audio)
-        
         if model is not None:
             # Use pre-loaded model
             if self.model_manager.get_device() != 'cpu':
                 decoded_tensor = decoded_tensor.to(self.model_manager.get_device())
             
             score = model(decoded_tensor)
-            return float(score.item())
+            return float(score[0].item())
         else:
-            # Fallback to original function
-            from codec.evaluation.torchmetrics import compute_NISQA
-            return compute_NISQA(decoded_tensor, fs=sr)
+            raise RuntimeError("NISQA model not loaded")
     
     def _compute_dnsmos(self, ref_path: str, dec_path: str, 
                        config: Dict[str, Any], model: Optional[Any] = None) -> float:

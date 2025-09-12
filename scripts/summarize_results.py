@@ -1,18 +1,16 @@
-# scripts/compare_results.py
-
 """
-Compare Results Across Multiple Models
+Summarize Results
 
 Usage:
-    python compare_results.py --results-dir results/ --output comparison.csv
+    python scripts/summarize_results.py --results-dir results/ --output comparison.csv
 """
 
 import argparse
-import json
 import logging
 from pathlib import Path
 from typing import Dict, List
 import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +24,54 @@ def setup_logging(verbose: bool = False):
     )
 
 
+def load_metric_csv(csv_file: Path) -> Dict:
+    """
+    Load a single metric CSV and compute statistics
+    
+    Args:
+        csv_file: Path to CSV file
+        
+    Returns:
+        Dictionary with mean, std, count statistics
+    """
+    try:
+        df = pd.read_csv(csv_file)
+        
+        # Find the metric column (assuming it's the last column or has a specific pattern)
+        metric_columns = [col for col in df.columns if col not in ['reference_path', 'decoded_path', 'reference_text']]
+        
+        if not metric_columns:
+            logger.warning(f"No metric columns found in {csv_file}")
+            return {'mean': np.nan, 'count': 0}
+        
+        # Use the first metric column (or the one that matches the filename)
+        metric_col = metric_columns[0]
+        
+        # For files like pesq_wb.csv, pesq_nb.csv, prefer the column that matches
+        filename_stem = csv_file.stem.lower()
+        for col in metric_columns:
+            if filename_stem.replace('_', '').replace('-', '') in col.lower().replace('_', '').replace('-', ''):
+                metric_col = col
+                break
+        
+        values = df[metric_col].dropna()
+        
+        if len(values) == 0:
+            return {'mean': np.nan, 'std': np.nan, 'count': 0}
+        
+        return {
+            'mean': float(values.mean()),
+            'std': float(values.std()),
+            'count': int(len(values)),
+            'min': float(values.min()),
+            'max': float(values.max())
+        }
+        
+    except Exception as e:
+        logger.warning(f"Failed to load {csv_file}: {e}")
+        return {'mean': np.nan, 'std': np.nan, 'count': 0}
+
+
 def load_model_results(results_dir: Path) -> Dict[str, Dict]:
     """
     Load results from all model directories
@@ -34,7 +80,7 @@ def load_model_results(results_dir: Path) -> Dict[str, Dict]:
         results_dir: Root results directory containing model subdirs
         
     Returns:
-        Dictionary mapping model_name -> summary_stats
+        Dictionary mapping model_name -> metric_name -> stats
     """
     model_results = {}
     
@@ -43,18 +89,24 @@ def load_model_results(results_dir: Path) -> Dict[str, Dict]:
             continue
             
         model_name = model_dir.name
-        stats_file = model_dir / "summary_stats.json"
+        model_results[model_name] = {}
         
-        if stats_file.exists():
-            try:
-                with open(stats_file, 'r') as f:
-                    stats = json.load(f)
-                model_results[model_name] = stats
-                logger.info(f"Loaded results for model: {model_name}")
-            except Exception as e:
-                logger.warning(f"Failed to load stats for {model_name}: {e}")
-        else:
-            logger.warning(f"No summary stats found for {model_name}")
+        # Find all CSV files in the model directory
+        csv_files = list(model_dir.glob("*.csv"))
+        
+        if not csv_files:
+            logger.warning(f"No CSV files found for model: {model_name}")
+            continue
+        
+        for csv_file in csv_files:
+            metric_name = csv_file.stem  # filename without extension
+            stats = load_metric_csv(csv_file)
+            model_results[model_name][metric_name] = stats
+            
+            if stats['count'] > 0:
+                logger.info(f"Loaded {metric_name} for {model_name}: mean={stats['mean']:.4f}, count={stats['count']}")
+            else:
+                logger.warning(f"No valid data for {metric_name} in {model_name}")
     
     return model_results
 
@@ -82,30 +134,30 @@ def create_comparison_table(model_results: Dict[str, Dict]) -> pd.DataFrame:
     # Create comparison data
     comparison_data = []
     
-    for model_name, stats in model_results.items():
+    for model_name, model_stats in model_results.items():
         row = {'model': model_name}
         
         for metric in all_metrics:
-            if metric in stats:
-                metric_stats = stats[metric]
-                if metric_stats['count'] > 0:
+            if metric in model_stats:
+                stats = model_stats[metric]
+                if stats['count'] > 0 and not np.isnan(stats['mean']):
                     # Include mean ± std format
-                    mean = metric_stats['mean']
-                    std = metric_stats['std']
-                    count = metric_stats['count']
+                    mean = stats['mean']
+                    std = stats['std']
+                    count = stats['count']
                     
                     row[f'{metric}_mean'] = mean
                     row[f'{metric}_std'] = std
                     row[f'{metric}_count'] = count
                     row[f'{metric}_formatted'] = f"{mean:.4f} ± {std:.4f} (n={count})"
                 else:
-                    row[f'{metric}_mean'] = None
-                    row[f'{metric}_std'] = None
+                    row[f'{metric}_mean'] = np.nan
+                    row[f'{metric}_std'] = np.nan
                     row[f'{metric}_count'] = 0
                     row[f'{metric}_formatted'] = "No results"
             else:
-                row[f'{metric}_mean'] = None
-                row[f'{metric}_std'] = None
+                row[f'{metric}_mean'] = np.nan
+                row[f'{metric}_std'] = np.nan
                 row[f'{metric}_count'] = 0
                 row[f'{metric}_formatted'] = "Not evaluated"
         
@@ -176,6 +228,12 @@ def main():
             return
         
         logger.info(f"Found results for {len(model_results)} models: {list(model_results.keys())}")
+        
+        # Print discovered metrics
+        all_metrics = set()
+        for stats in model_results.values():
+            all_metrics.update(stats.keys())
+        logger.info(f"Discovered metrics: {sorted(all_metrics)}")
         
         # Create comparison table
         df_comparison = create_comparison_table(model_results)

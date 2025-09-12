@@ -329,21 +329,14 @@ def init_model(model_name, use_gpu: bool = True):
     """
     Initialize model exactly as in the original script
     """
-    if model_name == 'unispeech_sat':
-        config_path = 'config/unispeech_sat.th'
-        model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='unispeech_sat', config_path=config_path)
-    elif model_name == 'wavlm_base_plus':
-        config_path = None
-        model = ECAPA_TDNN_SMALL(feat_dim=768, feat_type='wavlm_base_plus', config_path=config_path)
+    if model_name == 'wavlm_base_plus':
+        model = ECAPA_TDNN_SMALL(feat_dim=768, feat_type='wavlm_base_plus', config_path=None)
     elif model_name == 'wavlm_large':
-        config_path = None
-        model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='wavlm_large', config_path=config_path)
+        model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='wavlm_large', config_path=None)
     elif model_name == 'hubert_large':
-        config_path = None
-        model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='hubert_large_ll60k', config_path=config_path)
+        model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='hubert_large_ll60k', config_path=None)
     elif model_name == 'wav2vec2_xlsr':
-        config_path = None
-        model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='wav2vec2_xlsr', config_path=config_path)
+        model = ECAPA_TDNN_SMALL(feat_dim=1024, feat_type='wav2vec2_xlsr', config_path=None)
     else:
         model = ECAPA_TDNN_SMALL(feat_dim=40, feat_type='fbank')
 
@@ -415,8 +408,10 @@ def compute_speaker_similarity(reference: Union[str, np.ndarray],
     ref_audio = _load_and_preprocess_audio(reference, sample_rate, target_sr=sample_rate)
     dec_audio = _load_and_preprocess_audio(decoded, sample_rate, target_sr=sample_rate)
 
-    ref_audio = ref_audio.to(model.device)
-    dec_audio = dec_audio.to(model.device)
+    # Get device from model parameters
+    model_device = next(model.parameters()).device
+    ref_audio = ref_audio.to(model_device)
+    dec_audio = dec_audio.to(model_device)
     
     # Extract embeddings
     model.eval()
