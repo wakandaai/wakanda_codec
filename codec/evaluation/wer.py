@@ -81,4 +81,4 @@ def compute_wer(model,
     hypothesis_text = transcribe_audio(model, decoded_path, language)
     
     # Compute WER
-    return wer(reference_text, hypothesis_text)
+    return wer(reference_text.lower(), hypothesis_text.lower())

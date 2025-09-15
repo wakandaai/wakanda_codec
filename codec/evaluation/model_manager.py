@@ -126,7 +126,7 @@ class ModelManager:
     def _load_speaker_model(self, speaker_config: Dict[str, Any]):
         """Load speaker similarity model"""
         
-        model_name = speaker_config.get('model_name', 'wavlm_large')
+        model_name = speaker_config.get('model_name')
         model = init_model(model_name)
         model = model.to(self.device)
         model.eval()

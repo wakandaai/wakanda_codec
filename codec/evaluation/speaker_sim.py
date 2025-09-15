@@ -412,7 +412,7 @@ def compute_speaker_similarity(reference: Union[str, np.ndarray],
     model_device = next(model.parameters()).device
     ref_audio = ref_audio.to(model_device)
     dec_audio = dec_audio.to(model_device)
-    
+
     # Extract embeddings
     model.eval()
     with torch.no_grad():
@@ -421,8 +421,7 @@ def compute_speaker_similarity(reference: Union[str, np.ndarray],
     
     # Compute cosine similarity
     similarity = F.cosine_similarity(ref_embedding, dec_embedding)
-    
-    return float(similarity[0].item())
+    return float(similarity.item())
 
 # =============================================================================
 # Utility Functions
