@@ -20,7 +20,7 @@ import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Union, Tuple, Optional, List
-
+import librosa
 import numpy as np
 import soundfile
 from pystoi.stoi import stoi
@@ -332,8 +332,10 @@ def _validate_inputs(reference: Union[str, np.ndarray],
     dec_audio, dec_sr = _load_audio(decoded, sample_rate)
 
     # Validate sample rates match
-    if ref_sr != dec_sr:
-        raise ValueError(f"Sample rates don't match: reference={ref_sr}, decoded={dec_sr}")
+    if ref_sr != dec_sr:    # resample to 10kHz if needed (for STOI)
+        ref_audio = librosa.resample(ref_audio, orig_sr=ref_sr, target_sr=10000)
+        dec_audio = librosa.resample(dec_audio, orig_sr=dec_sr, target_sr=10000)
+        ref_sr = dec_sr = 10000
 
     # Ensure same length (truncate to shorter)
     min_len = min(len(ref_audio), len(dec_audio))
