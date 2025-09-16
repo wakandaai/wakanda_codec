@@ -14,8 +14,6 @@ from codec.evaluation.utmos import UTMOSPredictor
 from codec.evaluation.speaker_sim import init_model
 from codec.evaluation.wer import load_whisper_model
 from codec.evaluation.mcd import create_mcd_toolbox
-from torchmetrics.audio.nisqa import NonIntrusiveSpeechQualityAssessment
-from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +65,6 @@ class ModelManager:
                 model = self._load_speaker_model(metric_config)
             elif metric_name == 'wer' or metric_name == 'cer':
                 model = self._load_whisper_model(metric_config)
-            elif metric_name == 'nisqa':
-                model = self._load_nisqa_model(metric_config)
-            elif metric_name == 'dnsmos':
-                model = self._load_dnsmos_model(metric_config)
             elif metric_name == 'mcd':
                 model = create_mcd_toolbox()
             else:
@@ -142,33 +136,6 @@ class ModelManager:
         
         logger.info(f"Loaded Whisper model: {model_name}")
         return pipe
-    
-    def _load_nisqa_model(self, nisqa_config: Dict[str, Any]):
-        """Load NISQA model"""
-        
-        fs = nisqa_config.get('sample_rate', 16000)
-        nisqa_metric = NonIntrusiveSpeechQualityAssessment(fs=fs)
-        if self.device != 'cpu':
-            nisqa_metric = nisqa_metric.to(self.device)
-        
-        logger.info("Loaded NISQA model")
-        return nisqa_metric
-    
-    def _load_dnsmos_model(self, dnsmos_config: Dict[str, Any]):
-        """Load DNSMOS model"""
-        
-        fs = dnsmos_config.get('sample_rate', 16000)
-        personalized = dnsmos_config.get('personalized', False)
-        
-        dnsmos_metric = DeepNoiseSuppressionMeanOpinionScore(
-            fs=fs, 
-            personalized=personalized,
-            device=self.device,
-            cache_sessions=True
-        )
-        
-        logger.info("Loaded DNSMOS model")
-        return dnsmos_metric
     
     def get_device(self) -> str:
         """Get device being used for models"""
