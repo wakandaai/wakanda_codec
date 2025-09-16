@@ -118,15 +118,24 @@ class ModelManager:
         return predictor
     
     def _load_speaker_model(self, speaker_config: Dict[str, Any]):
-        """Load speaker similarity model"""
-        
-        model_name = speaker_config.get('model_name')
-        model = init_model(model_name)
-        model = model.to(self.device)
-        model.eval()
-        
-        logger.info(f"Loaded speaker similarity model: {model_name}")
-        return model
+            """Load ESPNet speaker similarity model"""
+            
+            model_name = speaker_config.get('model_name')
+            if not model_name:
+                raise ValueError("No model_name specified in speaker_similarity config")
+            
+            logger.info(f"Loading ESPNet speaker model: {model_name}")
+            
+            # Use GPU setting from model manager
+            use_gpu = (self.device == 'cuda')
+            
+            try:
+                model = init_model(model_name, use_gpu=use_gpu)
+                logger.info(f"Successfully loaded ESPNet speaker similarity model: {model_name}")
+                return model
+            except Exception as e:
+                logger.error(f"Failed to load speaker model {model_name}: {e}")
+                raise
     
     def _load_whisper_model(self, wer_config: Dict[str, Any]):
         """Load Whisper ASR model"""

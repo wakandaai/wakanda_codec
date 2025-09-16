@@ -16,12 +16,15 @@ import soundfile as sf
 import torch
 import torchaudio
 
+from torchmetrics.functional.audio.nisqa import non_intrusive_speech_quality_assessment
+from torchmetrics.functional.audio.dnsmos import deep_noise_suppression_mean_opinion_score
+from torchmetrics.functional.audio.pesq import perceptual_evaluation_speech_quality
+
 from codec.evaluation.model_manager import ModelManager
 from codec.evaluation.config import validate_config, get_enabled_metrics
 from codec.evaluation.speaker_sim import compute_speaker_similarity
 from codec.evaluation.espnet import compute_stoi
 from codec.evaluation.mcd import compute_mcd
-from codec.evaluation.torchmetrics import compute_PESQ, compute_NISQA, compute_DNSMOS
 from codec.evaluation.wer import compute_wer, transcribe_audio
 
 logger = logging.getLogger(__name__)
@@ -261,28 +264,38 @@ class DatasetEvaluator:
     def _compute_pesq(self, ref_path: str, dec_path: str, config: Dict[str, Any], mode: Literal['nb', 'wb'], n_processes: int) -> float:
         """Compute PESQ metric"""
         # load audio to tensors
-        ref_audio, _ = torchaudio.load(ref_path)
-        dec_audio, _ = torchaudio.load(dec_path)
+        ref_audio, ref_sr = torchaudio.load(ref_path) 
+        dec_audio, dec_sr = torchaudio.load(dec_path)
+
+        # Resample if needed
+        target_sr = 16000
+        if ref_sr != target_sr:
+            resampler = torchaudio.transforms.Resample(orig_freq=ref_sr, new_freq=target_sr)
+            ref_audio = resampler(ref_audio)
+        if dec_sr != target_sr:
+            resampler = torchaudio.transforms.Resample(orig_freq=dec_sr, new_freq=target_sr)
+            dec_audio = resampler(dec_audio)
 
         # Ensure both audio tensors have the same length
         ref_length = ref_audio.size(1)
         dec_length = dec_audio.size(1)
         
-        if dec_length < ref_length:
-            # Pad decoded audio if shorter than reference
-            padding = ref_length - dec_length
-            dec_audio = torch.nn.functional.pad(dec_audio, (0, padding))
-        elif dec_length > ref_length:
-            # Truncate decoded audio if longer than reference
-            dec_audio = dec_audio[:, :ref_length]
-        
+        # truncate to the shorter length
+        min_length = min(ref_length, dec_length)
+        ref_audio = ref_audio[:, :min_length]
+        dec_audio = dec_audio[:, :min_length]
+
         # Both tensors now have the same length
         assert ref_audio.size(1) == dec_audio.size(1), f"Audio length mismatch: ref={ref_audio.size(1)}, dec={dec_audio.size(1)}"
-        return compute_PESQ(
-            ref_audio, dec_audio,
+        pesq_score = perceptual_evaluation_speech_quality(
+            preds=dec_audio,
+            target=ref_audio,
+            fs=16000,
             mode=mode,
+            keep_same_device=True,
             n_processes=n_processes
         )
+        return float(pesq_score.item())
     
     def _compute_mcd(self, model, ref_path: str, dec_path: str) -> float:
         """Compute MCD metric"""
@@ -331,15 +344,8 @@ class DatasetEvaluator:
         # Load audio
         decoded_audio, sr = sf.read(dec_path)
         decoded_tensor = torch.from_numpy(decoded_audio)
-        if model is not None:
-            # Use pre-loaded model
-            if self.model_manager.get_device() != 'cpu':
-                decoded_tensor = decoded_tensor.to(self.model_manager.get_device())
-            
-            score = model(decoded_tensor)
-            return float(score[0].item())
-        else:
-            raise RuntimeError("NISQA model not loaded")
+        score = non_intrusive_speech_quality_assessment(preds=decoded_tensor, fs=sr)
+        return float(score[0].item())
     
     def _compute_dnsmos(self, ref_path: str, dec_path: str, 
                        config: Dict[str, Any], model: Optional[Any] = None) -> float:
@@ -348,22 +354,17 @@ class DatasetEvaluator:
         # Load audio
         decoded_audio, sr = sf.read(dec_path)
         decoded_tensor = torch.from_numpy(decoded_audio)
-        
-        if model is not None:
-            # Use pre-loaded model            
-            score = model(decoded_tensor)
-            if self.model_manager.get_device() != 'cpu':
-                score = score.to(self.model_manager.get_device())
-            return float(score.item())
-        else:
-            # Fallback to original function
-            return compute_DNSMOS(
-                decoded_tensor, 
-                fs=sr,
-                personalized=config.get('personalized', False),
-                device=self.model_manager.get_device()
-            )
-    
+
+        score = deep_noise_suppression_mean_opinion_score(
+                    preds=decoded_tensor,
+                    fs=sr,
+                    personalized=config.get('personalized', False),
+                    device=self.model_manager.get_device()
+                )
+        if self.model_manager.get_device() != 'cpu':
+            score = score.to(self.model_manager.get_device())
+        return float(score.item())
+
     def _compute_wer(self, dec_path: str, ref_text: str,
                     config: Dict[str, Any], model: Optional[Any] = None) -> float:
         """Compute WER metric using pre-loaded Whisper model"""

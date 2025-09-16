@@ -46,6 +46,9 @@ dependencies = [
     "onnxruntime-gpu",
     "requests",
     "transformers",
+    "espnet",
+    "espnet-model-zoo",
+    "s3prl"
 ]
 
 [project.optional-dependencies]
