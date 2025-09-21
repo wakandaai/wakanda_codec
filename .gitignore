@@ -5,3 +5,5 @@ PESQ*
 pesq_results.txt
 *.csv
 hub/
+*.sh
+*.out
