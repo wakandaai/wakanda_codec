@@ -12,7 +12,7 @@ import torch
 import warnings
 from codec.evaluation.utmos import UTMOSPredictor
 from codec.evaluation.speaker_sim import init_model
-from codec.evaluation.wer import load_whisper_model
+from codec.evaluation.wer import load_mms_model
 from codec.evaluation.mcd import create_mcd_toolbox
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class ModelManager:
             elif metric_name == 'speaker_similarity':
                 model = self._load_speaker_model(metric_config)
             elif metric_name == 'wer' or metric_name == 'cer':
-                model = self._load_whisper_model(metric_config)
+                model = self._load_mms_model(metric_config)
             elif metric_name == 'mcd':
                 model = create_mcd_toolbox()
             else:
@@ -137,14 +137,14 @@ class ModelManager:
                 logger.error(f"Failed to load speaker model {model_name}: {e}")
                 raise
     
-    def _load_whisper_model(self, wer_config: Dict[str, Any]):
-        """Load Whisper ASR model"""
+    def _load_mms_model(self, wer_config: Dict[str, Any]):
+        """Load MMS ASR model"""
         
-        model_name = wer_config.get('model_name', 'openai/whisper-large-v3')
-        pipe = load_whisper_model(model_name=model_name, device=self.device)
+        model_name = wer_config.get('model_name', 'facebook/mms-1b-all')
+        model = load_mms_model(model_name=model_name, device=self.device)
         
-        logger.info(f"Loaded Whisper model: {model_name}")
-        return pipe
+        logger.info(f"Loaded MMS model: {model_name}")
+        return model
     
     def get_device(self) -> str:
         """Get device being used for models"""

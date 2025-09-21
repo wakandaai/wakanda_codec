@@ -1,84 +1,68 @@
 # codec/evaluation/wer.py
 
-#!/usr/bin/env python3
 
 """
-WER (Word Error Rate) Evaluation using Whisper ASR
-
-Simple script to compute WER between reference text and Whisper transcriptions.
+MMS ASR for WER evaluation
 """
-
-import os
-import warnings
-from pathlib import Path
-from typing import Union, Optional, List
 
 import torch
+import librosa
 import soundfile as sf
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+from transformers import Wav2Vec2ForCTC, AutoProcessor
 from jiwer import wer, cer
 
 
-def load_whisper_model(model_name: str = "openai/whisper-large-v3", device: str = "auto"):
-    """Load Whisper model and create ASR pipeline"""
-    
+def load_mms_model(model_name: str = "facebook/mms-1b-all", device: str = "auto"):
+    """Load MMS model"""
     if device == "auto":
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    
-    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    
-    model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        model_name, 
-        torch_dtype=torch_dtype, 
-        low_cpu_mem_usage=True, 
-        use_safetensors=True
-    )
-    model.to(device)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     
     processor = AutoProcessor.from_pretrained(model_name)
+    model = Wav2Vec2ForCTC.from_pretrained(model_name)
+    model.to(device).eval()
     
-    pipe = pipeline(
-        "automatic-speech-recognition",
-        model=model,
-        tokenizer=processor.tokenizer,
-        feature_extractor=processor.feature_extractor,
-        torch_dtype=torch_dtype,
-        device=device,
-    )
-    
-    return pipe
+    return {"processor": processor, "model": model, "device": device, "current_lang": None}
 
 
-def transcribe_audio(pipe, audio_path: str, language: Optional[str] = None) -> str:
-    """Transcribe audio file using Whisper pipeline"""
+def transcribe_audio(mms_dict, audio_path: str, language: str = "eng") -> str:
+    """Transcribe audio with MMS"""
+    processor = mms_dict["processor"]
+    model = mms_dict["model"]
+    device = mms_dict["device"]
     
-    generate_kwargs = {}
-    if language:
-        generate_kwargs["language"] = language
+    # Switch language if needed
+    if language != mms_dict["current_lang"]:
+        processor.tokenizer.set_target_lang(language)
+        model.load_adapter(language)
+        mms_dict["current_lang"] = language
     
-    result = pipe(audio_path, generate_kwargs=generate_kwargs)
-    return result["text"].strip()
+    # Load and process audio
+    audio, sr = sf.read(audio_path)
+    # resample to 16kHz
+    if sr != 16000:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+        sr = 16000
+    # if stereo, convert to mono
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)
+    
+    inputs = processor(audio, sampling_rate=sr, return_tensors="pt")
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    
+    with torch.no_grad():
+        outputs = model(**inputs).logits
+    
+    ids = torch.argmax(outputs, dim=-1)[0]
+    return processor.decode(ids).strip()
 
 
-def compute_wer(model, 
-                decoded_path: str, 
-                reference_text: str, 
-                language: Optional[str] = None) -> float:
-    """
-    Compute WER using pre-loaded Whisper model and file paths
-    
-    Args:
-        model: Pre-loaded Whisper pipeline
-        decoded_path: Path to decoded audio file to transcribe
-        reference_text: Reference text for WER computation
-        language: Language code for Whisper (e.g., "en", "es") or None for auto-detect
-        
-    Returns:
-        WER score (0.0 = perfect, higher = worse)
-    """
-    
-    # Transcribe decoded audio
-    hypothesis_text = transcribe_audio(model, decoded_path, language)
-    
-    # Compute WER
-    return wer(reference_text.lower(), hypothesis_text.lower())
+def compute_wer(model, decoded_path: str, reference_text: str, language: str = "eng") -> float:
+    """Compute WER"""
+    hypothesis = transcribe_audio(model, decoded_path, language)
+    return wer(reference_text.lower(), hypothesis.lower())
+
+
+def compute_cer(model, decoded_path: str, reference_text: str, language: str = "eng") -> float:
+    """Compute CER"""
+    hypothesis = transcribe_audio(model, decoded_path, language)
+    return cer(reference_text.lower(), hypothesis.lower())
