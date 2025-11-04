@@ -256,7 +256,8 @@ def main():
             logger.info(f"Detailed comparison saved to: {args.output}")
             
             # Also save summary version
-            summary_file = Path(args.output).with_suffix('.summary.csv')
+            # remove .csv extension and add _summary.csv
+            summary_file = Path(args.output).with_suffix('').as_posix() + '_summary.csv'
             df_summary = create_summary_table(df_comparison)
             df_summary.to_csv(summary_file, index=False)
             logger.info(f"Summary version saved to: {summary_file}")

@@ -58,6 +58,12 @@ def main():
     
     setup_logging(args.verbose)
     logger = logging.getLogger(__name__)
+
+    # Determine results directory
+    if args.output:
+        results_dir = Path(args.output) / args.model_name
+    else:
+        results_dir = Path("results") / args.model_name
     
     try:
         # Load configuration
@@ -92,8 +98,7 @@ def main():
         
         # Run evaluation
         logger.info("Starting evaluation...")
-        results_df = evaluator.evaluate_dataset(file_pairs, args.output)
-        
+        results_df = evaluator.evaluate_dataset(file_pairs, results_dir)
         # Print summary
         summary = evaluator.get_summary_stats(results_df)
         
@@ -110,12 +115,6 @@ def main():
                 print(f"  Range: [{stats['min']:.4f}, {stats['max']:.4f}]")
             else:
                 print(f"\n{metric.upper()}: No results")
-        
-        # Determine results directory
-        if args.output:
-            results_dir = Path(args.output)
-        else:
-            results_dir = Path("results") / args.model_name
             
         print(f"\nResults saved to: {results_dir}")
         print(f"  - Individual metric files: {list(results_dir.glob('*.csv'))}")
