@@ -33,18 +33,24 @@ def process_audio_file(audio_path, model):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--input-dir', type=str, default='.')
-    parser.add_argument('--output-dir', required=True, type=str, default='outputs')
-    parser.add_argument('--model-type', type=str, default='16khz', 
+    parser.add_argument('--input-dir', type=str, required=True)
+    parser.add_argument('--output-dir', type=str, required=True)
+    parser.add_argument('--model-type', type=str, default=None, 
                        help='DAC model type (16khz, 24khz, 44khz)')
+    parser.add_argument('--model-path', type=str, default=None, 
+                       help='Path to a local DAC model (overrides model-type)')
     
     args = parser.parse_args()
 
-    print(f'Loading DAC model: {args.model_type}')
-    # Download and load the model
-    model_path = dac.utils.download(model_type=args.model_type)
+    model_path = args.model_path
+    if model_path is not None and exists(model_path):
+        print(f'Loading local model from: {model_path}')
+    else:
+        # Download and load the model
+        print(f'Downloading model of type: {args.model_type}')
+        model_path = dac.utils.download(model_type=args.model_type)
+
     model = dac.DAC.load(model_path)
-    
     # Set model to evaluation mode
     model.eval()
     
