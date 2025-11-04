@@ -132,15 +132,11 @@ class DatasetEvaluator:
         
         return df_results
     
-    def _setup_results_directory(self, output_path: Optional[str]):
+    def _setup_results_directory(self, output_path: str):
         """Setup results directory structure"""
-        if output_path:
-            # Use provided path as base
-            self.results_dir = Path(output_path).parent
-        else:
-            # Create results directory based on model name
-            self.results_dir = Path("results") / self.model_name
-        
+        self.results_dir = Path(output_path)
+        assert self.results_dir is not None
+        # create the dir if it doesn't exist
         self.results_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Results will be saved to: {self.results_dir}")
     
