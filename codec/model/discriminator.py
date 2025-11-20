@@ -177,6 +177,7 @@ class MRD(nn.Module):
 
 
 class Discriminator(ml.BaseModel):
+    INTERN = ["codec.**"]
     def __init__(
         self,
         rates: list = [],

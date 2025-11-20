@@ -27,6 +27,8 @@ class BaseCodec(ABC, BaseModel):
     - Properties for sample rate and hop length
     """
     
+    INTERN = ["codec.**"]
+    
     def __init__(self):
         super().__init__()
         self._sample_rate: int
