@@ -4,7 +4,7 @@
     DAC codec model implementation.
 
     Original code by Descript, Inc.
-    Source: https://github.com/Alexgichamba/descript-audio-codec/blob/main/dac/model/dac.py
+    Source: https://github.com/descriptinc/descript-audio-codec/blob/main/dac/model/dac.py
 """
 
 from typing import List, Union, Dict
@@ -103,6 +103,7 @@ class DecoderBlock(nn.Module):
                 kernel_size=2 * stride,
                 stride=stride,
                 padding=math.ceil(stride / 2),
+                output_padding=0 if stride % 2 == 0 else 1
             ),
             ResidualUnit(output_dim, dilation=1),
             ResidualUnit(output_dim, dilation=3),
