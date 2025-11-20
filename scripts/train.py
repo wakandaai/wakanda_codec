@@ -19,15 +19,15 @@ from audiotools.ml.decorators import when
 from torch.utils.tensorboard import SummaryWriter
 
 import codec
+from codec.model.base import BaseCodec
 from codec.model.dac import DACCodec
+from codec.model.transformer_codec import TransformerCodec
 from codec.model.discriminator import Discriminator
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # Enable cudnn autotuner to speed up training
-# (can be altered by the funcs.seed function)
 torch.backends.cudnn.benchmark = bool(int(os.getenv("CUDNN_BENCHMARK", 1)))
-# Uncomment to trade memory for speed.
 
 # Optimizers
 AdamW = argbind.bind(torch.optim.AdamW, "generator", "discriminator")
@@ -38,7 +38,9 @@ Accelerator = argbind.bind(ml.Accelerator, without_prefix=True)
 def ExponentialLR(optimizer, gamma: float = 1.0):
     return torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma)
 
+# Bind models - config determines which parameters get used
 DAC = argbind.bind(DACCodec)
+TransformerCodec = argbind.bind(TransformerCodec)
 DiscriminatorModel = argbind.bind(Discriminator)
 
 # Data
@@ -82,10 +84,6 @@ def build_dataset(
     sample_rate: int,
     folders: dict = None,
 ):
-    # Give one loader per key/value of dictionary, where
-    # value is a list of folders. Create a dataset for each one.
-    # Concatenate the datasets with ConcatDataset, which
-    # cycles through them.
     datasets = []
     for _, v in folders.items():
         loader = AudioLoader(sources=v)
@@ -99,7 +97,7 @@ def build_dataset(
 
 @dataclass
 class State:
-    generator: DAC
+    generator: BaseCodec
     optimizer_g: AdamW
     scheduler_g: ExponentialLR
 
@@ -126,6 +124,7 @@ def load(
     resume: bool = False,
     tag: str = "latest",
     load_weights: bool = False,
+    model_type: str = "dac",  # NEW: "dac" or "transformer"
 ):
     generator, g_extra = None, {}
     discriminator, d_extra = None, {}
@@ -137,13 +136,29 @@ def load(
             "package": not load_weights,
         }
         tracker.print(f"Resuming from {str(Path('.').absolute())}/{kwargs['folder']}")
-        if (Path(kwargs["folder"]) / "dac").exists():
-            generator, g_extra = DAC.load_from_folder(**kwargs)
+        
+        # Load generator based on model_type
+        if model_type == "dac" and (Path(kwargs["folder"]) / "dac").exists():
+            generator, g_extra = DACCodec.load_from_folder(**kwargs)
+        elif model_type == "transformer" and (Path(kwargs["folder"]) / "transformercodec").exists():
+            generator, g_extra = TransformerCodec.load_from_folder(**kwargs)
+        
+        # Load discriminator (shared)
         if (Path(kwargs["folder"]) / "discriminator").exists():
             discriminator, d_extra = Discriminator.load_from_folder(**kwargs)
 
-    generator = DAC() if generator is None else generator
-    discriminator = Discriminator() if discriminator is None else discriminator
+    # Create new models if not loaded
+    if generator is None:
+        tracker.print(f"Creating new {model_type} generator")
+        if model_type == "dac":
+            generator = DAC()
+        elif model_type == "transformer":
+            generator = TransformerCodec()
+        else:
+            raise ValueError(f"Unknown model_type: {model_type}. Use 'dac' or 'transformer'")
+    
+    if discriminator is None:
+        discriminator = DiscriminatorModel()
 
     tracker.print(generator)
     tracker.print(discriminator)
@@ -391,7 +406,6 @@ def train(
     )
 
     # Wrap the functions so that they neatly track in TensorBoard + progress bars
-    # and only run when specific conditions are met.
     global train_loop, val_loop, validate, save_samples, checkpoint
     train_loop = tracker.log("train", "value", history=False)(
         tracker.track("train", num_iters, completed=state.tracker.step)(train_loop)

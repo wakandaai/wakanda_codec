@@ -9,8 +9,8 @@ TransformerCodec.encoder_rates: [2, 4, 5, 8]
 
 # Transformer config
 TransformerCodec.latent_dim: 512
-TransformerCodec.encoder_transformer_layers: 6
-TransformerCodec.decoder_transformer_layers: 6
+TransformerCodec.encoder_transformer_layers: 4
+TransformerCodec.decoder_transformer_layers: 4
 TransformerCodec.transformer_num_heads: 8
 TransformerCodec.transformer_dim_feedforward: 2048
 TransformerCodec.transformer_dropout: 0.1
