@@ -318,7 +318,7 @@ def save_samples(state, val_idx, writer):
     )
 
     out = state.generator(signal.audio_data, signal.sample_rate)
-    recons = AudioSignal(out["audio"], signal.sample_rate)
+    recons = AudioSignal(out["recon_audio"], signal.sample_rate)
 
     audio_dict = {"recons": recons}
     if state.tracker.step == 0:

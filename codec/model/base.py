@@ -12,10 +12,11 @@
 """
 
 from abc import ABC, abstractmethod
+from audiotools.ml import BaseModel
 import torch
 from typing import Dict
 
-class BaseCodec(ABC, torch.nn.Module):
+class BaseCodec(ABC, BaseModel):
     """ Abstract base class for neural audio codec models.
     
     All codec implementations must inherit from this class and implement the required abstract methods.
