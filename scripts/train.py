@@ -38,7 +38,7 @@ Accelerator = argbind.bind(ml.Accelerator, without_prefix=True)
 def ExponentialLR(optimizer, gamma: float = 1.0):
     return torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma)
 
-DACModel = argbind.bind(DACCodec)
+DAC = argbind.bind(DACCodec)
 DiscriminatorModel = argbind.bind(Discriminator)
 
 # Data

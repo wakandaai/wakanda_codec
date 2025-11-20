@@ -2,15 +2,15 @@
 
 # Code by Descript, Inc.
 # Source: https://github.com/descriptinc/descript-audio-codec/blob/main/dac/model/discriminator.py
-# Modified to use torchaudio instead of audiotools
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from audiotools import AudioSignal
+from audiotools import ml
+from audiotools import STFTParams
 from einops import rearrange
 from torch.nn.utils import weight_norm
-import torchaudio
-
 
 def WNConv1d(*args, **kwargs):
     act = kwargs.pop("act", True)
@@ -84,16 +84,9 @@ class MSD(nn.Module):
         self.rate = rate
 
     def forward(self, x):
-        # Resample to lower rate (equivalent to AudioSignal.resample)
-        if self.rate != 1:
-            B, C, T = x.shape
-            x = x.reshape(B * C, T)
-            x = torchaudio.functional.resample(
-                x, 
-                orig_freq=self.sample_rate, 
-                new_freq=self.sample_rate // self.rate
-            )
-            x = x.reshape(B, C, -1)
+        x = AudioSignal(x, self.sample_rate)
+        x.resample(self.sample_rate // self.rate)
+        x = x.audio_data
 
         fmap = []
 
@@ -134,7 +127,11 @@ class MRD(nn.Module):
         self.window_length = window_length
         self.hop_factor = hop_factor
         self.sample_rate = sample_rate
-        self.hop_length = int(window_length * hop_factor)
+        self.stft_params = STFTParams(
+            window_length=window_length,
+            hop_length=int(window_length * hop_factor),
+            match_stride=True,
+        )
 
         n_fft = window_length // 2 + 1
         bands = [(int(b[0] * n_fft), int(b[1] * n_fft)) for b in bands]
@@ -154,26 +151,9 @@ class MRD(nn.Module):
         self.conv_post = WNConv2d(ch, 1, (3, 3), (1, 1), padding=(1, 1), act=False)
 
     def spectrogram(self, x):
-        # Equivalent to AudioSignal.stft() with the stored stft_params
-        B, C, T = x.shape
-        x = x.reshape(B * C, T)
-        
-        # Compute STFT - using hann window to match audiotools default
-        window = torch.hann_window(self.window_length, device=x.device)
-        stft = torch.stft(
-            x,
-            n_fft=self.window_length,
-            hop_length=self.hop_length,
-            win_length=self.window_length,
-            window=window,
-            center=True,
-            return_complex=True,
-        )
-        
-        # Match the audiotools format: view_as_real and rearrange
-        x = torch.view_as_real(stft)
-        x = rearrange(x, "(b c) f t complex -> (b c) complex t f", b=B, c=C, complex=2)
-        
+        x = AudioSignal(x, self.sample_rate, stft_params=self.stft_params)
+        x = torch.view_as_real(x.stft())
+        x = rearrange(x, "b 1 f t c -> (b 1) c t f")
         # Split into bands
         x_bands = [x[..., b[0] : b[1]] for b in self.bands]
         return x_bands
@@ -196,7 +176,7 @@ class MRD(nn.Module):
         return fmap
 
 
-class Discriminator(nn.Module):
+class Discriminator(ml.BaseModel):
     def __init__(
         self,
         rates: list = [],
