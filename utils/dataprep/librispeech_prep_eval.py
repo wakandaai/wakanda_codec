@@ -78,7 +78,8 @@ class LibriSpeechProcessor:
                 
                 # Find corresponding decoded file
                 relative_path = audio_file.relative_to(self.split_root)
-                decoded_file = self.codec_output_root / relative_path
+                decoded_relative = relative_path.with_suffix(".wav")
+                decoded_file = self.codec_output_root / decoded_relative
                 
                 # Validate files exist and are readable
                 if not self._validate_file(audio_file):

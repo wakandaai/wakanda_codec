@@ -9,3 +9,5 @@ hub/
 *.out
 LibriSpeech
 runs/
+data/
+tokenizer/
