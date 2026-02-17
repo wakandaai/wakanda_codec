@@ -11,8 +11,9 @@ def main():
     parser = argparse.ArgumentParser(description="Precompute speech tokens for training.")
     parser.add_argument("--input_dir", type=str, required=True, help="Path to input audio folder")
     parser.add_argument("--output_dir", type=str, required=True, help="Path to save .npy files")
-    parser.add_argument("--codec", type=str, required=True, choices=['dac', 'mimi', 'snac'], help="Which codec to use")
+    parser.add_argument("--codec", type=str, required=True, choices=['dac', 'mimi', 'snac', 'bigcodec'], help="Which codec to use")
     parser.add_argument("--model_name", type=str, default=None, help="Optional model name/path override")
+    parser.add_argument("--repo_path", type=str, default=None, help="Optional repository path override for bigcodec")
     args = parser.parse_args()
 
     # Initialize Tokenizer
@@ -22,6 +23,8 @@ def main():
         # Handle parameter naming differences if necessary
         if args.codec == 'dac':
              kwargs = {'model_type': args.model_name}
+        if args.codec == 'bigcodec':
+            kwargs = {'repo_path': args.repo_path}
     
     print(f"Initializing {args.codec}...")
     tokenizer = AudioTokenizer.get_tokenizer(args.codec, **kwargs)

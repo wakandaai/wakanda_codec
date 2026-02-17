@@ -27,6 +27,8 @@ class AudioTokenizer(ABC):
             return MimiTokenizer(**kwargs)
         elif name.lower() == 'snac':
             return SnacTokenizer(**kwargs)
+        elif name.lower() == 'bigcodec':
+            return BigCodecTokenizer(**kwargs)
         else:
             raise ValueError(f"Unknown tokenizer: {name}")
 
@@ -98,7 +100,7 @@ class MimiTokenizer(AudioTokenizer):
             
         return codes.squeeze(0).cpu().numpy().astype(np.int16)
 
-# --- SNAC (BigCodec) Implementation ---
+# --- SNAC Implementation ---
 class SnacTokenizer(AudioTokenizer):
     def __init__(self, model_name='hubertsiuzdak/snac_24khz', device='cuda'):
         super().__init__(device)
@@ -154,3 +156,58 @@ class SnacTokenizer(AudioTokenizer):
         full_codes = torch.cat(aligned_codes, dim=1)
         
         return full_codes.squeeze(0).cpu().numpy().astype(np.int16)
+
+
+# --- BigCodec Implementation ---
+class BigCodecTokenizer(AudioTokenizer):
+    def __init__(self, repo_path='/ocean/projects/cis250145p/gichamba/codecs/BigCodec', device='cuda'):
+        super().__init__(device)
+        # bigcodec path: /ocean/projects/cis250145p/gichamba/codecs/BigCodec
+        import sys
+        sys.path.insert(0, repo_path)
+        import librosa
+        import torch
+        from vq.codec_encoder import CodecEncoder
+        from vq.codec_decoder import CodecDecoder
+        
+        self.librosa = librosa
+        self.sampling_rate = 16000
+        
+        # Load checkpoint
+        ckpt_path = os.path.join(repo_path, 'bigcodec.pt')
+        ckpt = torch.load(ckpt_path, map_location='cpu')
+        
+        self.encoder = CodecEncoder()
+        self.encoder.load_state_dict(ckpt['CodecEnc'])
+        self.encoder = self.encoder.eval().to(self.device)
+        
+        self.decoder = CodecDecoder()
+        self.decoder.load_state_dict(ckpt['generator'])
+        self.decoder = self.decoder.eval().to(self.device)
+
+    def encode(self, audio_path):
+        import soundfile as sf
+        import torch.nn.functional as F
+        
+        # Load and resample
+        audio, sr = sf.read(audio_path)
+        if audio.ndim > 1:
+            audio = self.librosa.to_mono(audio.T)
+        if sr != self.sampling_rate:
+            audio = self.librosa.resample(audio, orig_sr=sr, target_sr=self.sampling_rate)
+        
+        wav = torch.from_numpy(audio).float().unsqueeze(0).to(self.device)
+        
+        # Pad to multiple of 200
+        wav = F.pad(wav, (0, (200 - (wav.shape[1] % 200))))
+        
+        with torch.no_grad():
+            vq_emb = self.encoder(wav.unsqueeze(1))  # (B, 1, T)
+            _, vq_code, _ = self.decoder(vq_emb, vq=True)
+        
+        # BigCodec uses single codebook: shape (B, T) -> (1, T)
+        codes = vq_code.squeeze(0).cpu().numpy()
+        if codes.ndim == 1:
+            codes = codes[np.newaxis, :]
+        
+        return codes.astype(np.int16)
