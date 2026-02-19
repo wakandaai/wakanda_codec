@@ -14,7 +14,7 @@ from transformers import (
 )
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from .sub_transformer import SubTransformer, SubTransformerConfig
+from codec.tts.depth_transformer import DepthTransformer, DepthTransformerConfig
 
 
 @dataclass
@@ -71,7 +71,7 @@ class LlamaTTSConfig(PretrainedConfig):
             if sub_transformer_config is None:
                 sub_transformer_config = {}
             
-            self.sub_transformer_config = SubTransformerConfig(
+            self.sub_transformer_config = DepthTransformerConfig(
                 num_codebooks=num_codebooks,
                 codebook_vocab_size=codebook_vocab_size,
                 **sub_transformer_config
@@ -108,7 +108,7 @@ class LlamaTTSForCausalLM(LlamaForCausalLM):
         
         # Sub-transformer for multi-codebook prediction
         if config.use_sub_transformer and config.num_codebooks > 1:
-            self.sub_transformer = SubTransformer(
+            self.sub_transformer = DepthTransformer(
                 config.sub_transformer_config,
                 base_model_config=config
             )

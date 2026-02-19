@@ -13,7 +13,7 @@ from transformers.models.llama.modeling_llama import (
 )
 
 
-class SubTransformerConfig(PretrainedConfig):
+class DepthTransformerConfig(PretrainedConfig):
     """Configuration for the sub-transformer."""
     
     model_type = "sub_transformer"
@@ -49,7 +49,7 @@ class SubTransformerConfig(PretrainedConfig):
         self.attention_dropout = attention_dropout
 
 
-class SubTransformer(nn.Module):
+class DepthTransformer(nn.Module):
     """
     Sub-transformer that predicts codebooks 1 to N-1 sequentially.
     
@@ -61,7 +61,7 @@ class SubTransformer(nn.Module):
     autoregressively within each timestep.
     """
     
-    def __init__(self, config: SubTransformerConfig, base_model_config):
+    def __init__(self, config: DepthTransformerConfig, base_model_config):
         super().__init__()
         self.config = config
         self.num_codebooks = config.num_codebooks

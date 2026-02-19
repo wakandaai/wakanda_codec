@@ -6,7 +6,7 @@ framerate: 50  # Hz
 
 # Speaker embedding configuration
 speaker_embedding:
-  model_name: "espnet/voxcelebs12_ecapa_mel"
+  model_name: "espnet/voxcelebs12_rawnet3"
   dim: 256
   freeze_projection: true
 

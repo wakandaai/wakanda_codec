@@ -43,9 +43,9 @@ training:
   
   # Evaluation and saving
   evaluation_strategy: "steps"
-  eval_steps: 1000
+  eval_steps: 5000
   save_strategy: "steps"
-  save_steps: 1000
+  save_steps: 5000
   save_total_limit: 3
   
   # Logging
@@ -59,10 +59,10 @@ training:
   dataloader_prefetch_factor: 2
   
   # DeepSpeed
-  deepspeed: "configs/ds_zero2.json"
+  deepspeed: "config/tts_configs/ds_zero2.json"
 
 # Data configuration
 data:
-  train_csv: "data/train.csv"
-  val_csv: "data/val.csv"
+  train_csv: "data/csvs/bigcodec/train-clean-460.csv"
+  val_csv: "data/csvs/bigcodec/dev-clean.csv"
   text_lowercase: false  # Keep LibriSpeech uppercase

@@ -23,9 +23,10 @@ from transformers import (
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.model import LlamaTTSForCausalLM, LlamaTTSConfig
-from src.data import TTSDataset, TTSDataCollator
-from src.training import TTSTrainer
+from codec.tts.tts_model import LlamaTTSForCausalLM, LlamaTTSConfig
+from codec.tts.dataset import TTSDataset
+from codec.tts.collator import TTSDataCollator
+from codec.tts.trainer import TTSTrainer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -200,6 +201,7 @@ def main():
     dataset_config = {
         'num_codebooks': codec_config['num_codebooks'],
         'codebook_vocab_size': codec_config['codebook_vocab_size'],
+        'framerate': codec_config['framerate'],
     }
     
     train_dataset = TTSDataset(

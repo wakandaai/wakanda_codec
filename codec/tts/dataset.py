@@ -23,7 +23,7 @@ class TTSDataset(Dataset):
         NumPy array of shape (num_codebooks, time)
     
     Speaker embedding format:
-        NumPy array of shape (speaker_embedding_dim,)
+        NumPy array of shape (1, speaker_embedding_dim)
     """
     
     def __init__(
@@ -31,7 +31,7 @@ class TTSDataset(Dataset):
         csv_path: str,
         tokenizer,
         config: Dict,
-        max_seq_length: int = 2048,
+        max_seq_length: int = 4096,
     ):
         self.df = pd.read_csv(csv_path)
         self.tokenizer = tokenizer
@@ -66,8 +66,8 @@ class TTSDataset(Dataset):
         
         try:
             # Load speaker embedding
-            speaker_emb = np.load(row['path_to_spk_embed'])  # (spk_dim,)
-            speaker_emb = torch.tensor(speaker_emb, dtype=torch.float32)
+            speaker_emb = np.load(row['path_to_spk_embed'])  # (1, speaker_embedding_dim)
+            speaker_emb = torch.tensor(speaker_emb, dtype=torch.float32).squeeze()  # (speaker_embedding_dim,)
             
             # Load codes
             codes = np.load(row['path_to_codes'])  # (num_codebooks, time)
@@ -79,14 +79,10 @@ class TTSDataset(Dataset):
             num_codebooks, time_steps = codes.shape
             
             # Handle single vs multi-codebook
-            if num_codebooks < self.num_codebooks:
-                logger.warning(
-                    f"File {row['path_to_codes']} has {num_codebooks} codebooks, "
-                    f"expected {self.num_codebooks}. Padding with zeros."
+            if num_codebooks != self.num_codebooks:
+                raise ValueError(
+                    f"Expected {self.num_codebooks} codebooks, got {num_codebooks} in sample {idx}"
                 )
-                padded = np.zeros((self.num_codebooks, time_steps), dtype=codes.dtype)
-                padded[:num_codebooks, :] = codes
-                codes = padded
             
             # Get text
             text = row['text']
