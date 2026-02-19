@@ -1,0 +1,17 @@
+# Codec configuration
+codec_name: "bigcodec"
+num_codebooks: 8
+codebook_vocab_size: 1024
+framerate: 50  # Hz
+
+# Speaker embedding configuration
+speaker_embedding:
+  model_name: "espnet/voxcelebs12_ecapa_mel"
+  dim: 256
+  freeze_projection: true
+
+# Data paths
+data:
+  codes_root: "data/codes/bigcodec/LibriSpeech"
+  speaker_embeds_root: "data/spk_embds/espnet_ecapa/LibriSpeech"
+  audio_root: "data/LibriSpeech"  # For speaker embedding extraction

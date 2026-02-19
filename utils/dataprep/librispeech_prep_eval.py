@@ -35,7 +35,7 @@ class LibriSpeechProcessor:
         if not self.codec_output_root.exists():
             raise FileNotFoundError(f"Codec output root not found: {codec_output_root}")
     
-    def generate_manifest(self, output_csv: str) -> pd.DataFrame:
+    def generate_manifest(self, output_csv: str, replace_with_wav: bool = False) -> pd.DataFrame:
         """
         Generate CSV manifest for the LibriSpeech split
         
@@ -67,7 +67,7 @@ class LibriSpeechProcessor:
             try:
                 # Extract utterance ID from filename
                 utterance_id = audio_file.stem  # Remove .flac extension
-                
+                format_suffix = audio_file.suffix  # e.g., .flac
                 # Get transcription
                 if utterance_id not in transcriptions:
                     missing_transcriptions.append(utterance_id)
@@ -78,7 +78,11 @@ class LibriSpeechProcessor:
                 
                 # Find corresponding decoded file
                 relative_path = audio_file.relative_to(self.split_root)
-                decoded_relative = relative_path.with_suffix(".wav")
+                if replace_with_wav:
+                    # Replace .flac with .wav in the relative path
+                    decoded_relative = relative_path.with_suffix(".wav")
+                else:
+                    decoded_relative = relative_path.with_suffix(format_suffix)
                 decoded_file = self.codec_output_root / decoded_relative
                 
                 # Validate files exist and are readable
@@ -197,7 +201,8 @@ class LibriSpeechProcessor:
 
 def generate_librispeech_manifest(split_root: str, 
                                  codec_output_root: str,
-                                 output_csv: str) -> pd.DataFrame:
+                                 output_csv: str,
+                                 replace_with_wav: bool = False) -> pd.DataFrame:
     """
     Convenience function to generate LibriSpeech manifest
     
@@ -231,12 +236,14 @@ if __name__ == "__main__":
                        help="Path to codec output root directory")
     parser.add_argument("--output", required=True,
                        help="Output CSV file")
+    parser.add_argument("--replace_with_wav", action='store_true',
+                       help="Replace codec output paths with WAV paths")
     
     args = parser.parse_args()
     setup_logging()
     
     try:
-        df = generate_librispeech_manifest(args.split_root, args.codec_output_root, args.output)
+        df = generate_librispeech_manifest(args.split_root, args.codec_output_root, args.output, args.replace_with_wav)
         print(f"Generated manifest with {len(df)} entries: {args.output}")
         
     except Exception as e:

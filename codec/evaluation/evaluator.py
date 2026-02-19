@@ -363,9 +363,9 @@ class DatasetEvaluator:
 
     def _compute_wer(self, dec_path: str, ref_text: str,
                     config: Dict[str, Any], model: Optional[Any] = None) -> float:
-        """Compute WER metric using pre-loaded Whisper model"""
+        """Compute WER metric using pre-loaded ASR model"""
         if model is None:
-            raise RuntimeError("Whisper model not loaded for WER computation")
+            raise RuntimeError("ASR model not loaded for WER computation")
         
         # Transcribe decoded audio using pre-loaded model
         language = config.get('language')
@@ -379,9 +379,9 @@ class DatasetEvaluator:
     
     def _compute_cer(self, ref_path: str, dec_path: str, 
                     config: Dict[str, Any], model: Optional[Any] = None, ref_text: str = None) -> float:
-        """Compute CER metric using pre-loaded Whisper model"""
+        """Compute CER metric using pre-loaded ASR model"""
         if model is None:
-            raise RuntimeError("Whisper model not loaded for CER computation")
+            raise RuntimeError("ASR model not loaded for CER computation")
         
         # Use provided reference text or load from file
         if ref_text is None:

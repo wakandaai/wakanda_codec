@@ -1,0 +1,68 @@
+# Model configuration
+model:
+  base_model: "meta-llama/Llama-3.2-1B-Instruct"
+  cache_dir: null
+  
+  # Special tokens
+  special_tokens:
+    - "<|speaker|>"
+    - "<|text_start|>"
+    - "<|text_end|>"
+    - "<|speech_start|>"
+    - "<|speech_end|>"
+  
+  # Sub-transformer configuration (for multi-codebook)
+  sub_transformer:
+    enabled: true  # Set to false for single-codebook training
+    num_layers: 5
+    hidden_size: 2048  # Same as base model
+    num_attention_heads: 16
+    num_key_value_heads: 2
+    intermediate_size: 5632
+    loss_weight: 0.3
+
+# Training configuration
+training:
+  output_dir: "outputs/llama_tts_bigcodec_8cb"
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  adam_beta2: 0.95
+  warmup_ratio: 0.03
+  lr_scheduler_type: "cosine"
+  
+  # Mixed precision
+  bf16: true
+  fp16: false
+  
+  # Memory optimization
+  gradient_checkpointing: true
+  
+  # Evaluation and saving
+  evaluation_strategy: "steps"
+  eval_steps: 1000
+  save_strategy: "steps"
+  save_steps: 1000
+  save_total_limit: 3
+  
+  # Logging
+  logging_steps: 50
+  report_to: "wandb"
+  run_name: "llama-tts-bigcodec-8cb"
+  
+  # Data
+  max_seq_length: 2048
+  dataloader_num_workers: 4
+  dataloader_prefetch_factor: 2
+  
+  # DeepSpeed
+  deepspeed: "configs/ds_zero2.json"
+
+# Data configuration
+data:
+  train_csv: "data/train.csv"
+  val_csv: "data/val.csv"
+  text_lowercase: false  # Keep LibriSpeech uppercase
